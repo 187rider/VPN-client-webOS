@@ -19,12 +19,15 @@ class FreshInstallerMock(unittest.TestCase):
         self.hb.mkdir()
         (self.hb/'startup.sh').write_text('#!/bin/sh\n')
         self.stage.mkdir()
+        self.proc_mounts = d / 'proc_mounts'
+        self.proc_mounts.write_text('none /sys sysfs rw 0 0\n')
         self.script=d/'setup.sh'
         src=(ROOT/'scripts/install-root.sh').read_text()
         src=src.replace('/media/developer/cvpn-webos',str(self.base))
         src=src.replace('/var/lib/webosbrew/init.d',str(self.hb/'init.d'))
         src=src.replace('/var/lib/webosbrew/startup.sh',str(self.hb/'startup.sh'))
         src=src.replace('/tmp/cvpn-root-setup',str(self.stage))
+        src=src.replace('/proc/mounts',str(self.proc_mounts))
         self.script.write_text(src)
         self.bindir=d/'bin';self.bindir.mkdir()
         commands={

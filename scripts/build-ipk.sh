@@ -2,7 +2,10 @@
 # Reproducible Debian-format webOS IPK containing the TV launcher, backend, Xray and recovery.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-command -v dpkg-deb >/dev/null || { echo 'dpkg-deb required (Linux/Ubuntu or GitHub Actions)' >&2; exit 1; }
+if ! command -v dpkg-deb >/dev/null 2>&1; then
+    echo "dpkg-deb not found; using cross-platform builder scripts/build-ipk.py"
+    exec python3 "$ROOT/scripts/build-ipk.py"
+fi
 python3 - "$ROOT/launcher/appinfo.json" <<'PY'
 import json,sys,pathlib
 p=pathlib.Path(sys.argv[1]); d=json.loads(p.read_text())
