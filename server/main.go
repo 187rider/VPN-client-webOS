@@ -415,6 +415,24 @@ func (a *app) api(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 200, map[string]any{"logs": safeEventSummary() + "\n\n" + safeEngineLogSummary()})
 		return
 	}
+	if r.URL.Path == "/api/geoip/status" && r.Method == "GET" {
+		a.handleGeoIPStatus(w, r)
+		return
+	}
+	if r.URL.Path == "/api/geoip/settings" {
+		if !requirePost(w, r) {
+			return
+		}
+		a.handleGeoIPSettings(w, r)
+		return
+	}
+	if r.URL.Path == "/api/geoip/update" {
+		if !requirePost(w, r) {
+			return
+		}
+		a.handleGeoIPManualUpdate(w, r)
+		return
+	}
 	errorOut(w, 404, "unknown endpoint")
 }
 func (a *app) engine(w http.ResponseWriter, r *http.Request) {
@@ -1183,6 +1201,7 @@ func main() {
 	if e := bootstrap(); e != nil {
 		log.Fatal(e)
 	}
+	startGeoIPAutoUpdater()
 	keyBytes, err := os.ReadFile(path("webui", "access.key"))
 	fail(err)
 	key := strings.TrimSpace(string(keyBytes))

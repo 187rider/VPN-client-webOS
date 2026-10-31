@@ -138,7 +138,7 @@ func createBrowserSession(w http.ResponseWriter, r *http.Request, name string) e
 	return nil
 }
 func tvLANAddress() string {
-	for _, name := range []string{"eth0", "wlan0", "wlan1"} {
+	for _, name := range []string{"eth0", "wlan0", "wlan1", "en0", "en1"} {
 		nic, e := net.InterfaceByName(name)
 		if e != nil {
 			continue

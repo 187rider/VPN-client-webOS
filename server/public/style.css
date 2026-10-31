@@ -298,3 +298,23 @@ body{color:#f7f8fc;background:radial-gradient(ellipse 420px 350px at 8% 22%,rgba
 .recovery-restore{border-color:rgba(168,192,231,.32)!important;background:#22283a!important;color:#e4eeff!important}
 .recovery-buttons button:disabled{opacity:.4!important}
 @media(max-width:390px){.recovery-content{padding:0 11px 13px}.recovery-step{gap:8px}.recovery-actions{padding:11px}}
+
+/* GeoIP routing and status */
+.settings-geoip-info{margin:0 16px;padding:12px 0;border-top:1px solid rgba(139,164,205,.15);font-size:12px;display:grid;gap:8px}
+.geoip-meta-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.geoip-meta-row strong{font-size:12px;color:#e3ebfd}
+.geoip-sources-panel{margin-top:12px;border-top:1px solid rgba(139,164,205,.14)}
+.settings-field-group{padding:10px 17px}
+.settings-field-group label{display:block;font-size:12px;color:var(--text);margin-bottom:6px}
+.settings-input{width:100%;box-sizing:border-box;background:#151e2c;border:1px solid #364b66;border-radius:9px;padding:8px 10px;color:#e3ebfd;font-size:12px;font-family:monospace}
+.settings-input:focus{outline:2px solid var(--accent);border-color:transparent}
+.primary-mini{background:#264a7f;border-color:#3f6aa6;color:#fff}
+.primary-mini:hover{background:#315c9e}
+.primary-mini:disabled{opacity:.6;cursor:not-allowed}
+.text-btn{background:transparent;border-color:#364b66;color:#9bb7de}
+.text-btn:hover{background:#1c2a3d}
+.geoip-status-msg{margin:4px 0;padding:8px 12px;border-radius:9px;font-size:12px;line-height:1.4}
+.geoip-status-msg.success{background:rgba(30,70,45,.6);border:1px solid #2e7d4f;color:#83d3b4}
+.geoip-status-msg.error{background:rgba(70,30,30,.6);border:1px solid #8e3535;color:#f59e9e}
+.geoip-status-msg.info{background:rgba(30,45,70,.6);border:1px solid #385e8d;color:#a4c7f5}
+

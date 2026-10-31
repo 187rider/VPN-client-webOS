@@ -94,6 +94,48 @@
               <div class="settings-row settings-language-row"><label class="settings-row-label" for="settings-language"><strong>Язык интерфейса</strong><small>Автоматически или вручную для панели и TV QR</small></label><select id="settings-language" class="settings-language-select" aria-label="Язык интерфейса"><option value="auto">Автоматически</option><option value="ru">Русский</option><option value="en">English</option></select></div>
               <label class="settings-row settings-switch-row" for="settings-reduce-motion"><span class="settings-row-label"><strong>Уменьшить анимации</strong><small>Более спокойные переходы и индикаторы</small></span><input id="settings-reduce-motion" type="checkbox" class="settings-switch" /></label>
             </section>
+            <section class="settings-pane" aria-label="Маршрутизация и GeoIP">
+              <div class="settings-pane-head"><span class="settings-pane-icon" aria-hidden="true">🌐</span><div><h3>Маршрутизация и GeoIP</h3><p>Прямой доступ к .ru и правила обхода</p></div><span id="geoip-status-badge" class="settings-connected">Активно</span></div>
+              <div class="settings-geoip-info">
+                <div class="geoip-meta-row"><span class="muted">База IP (geoip.dat):</span><strong id="geoip-file-info">—</strong></div>
+                <div class="geoip-meta-row"><span class="muted">База доменов (geosite.dat):</span><strong id="geosite-file-info">—</strong></div>
+                <div class="geoip-meta-row"><span class="muted">Последняя проверка:</span><span id="geoip-last-check">—</span></div>
+                <div id="geoip-status-msg" class="geoip-status-msg" hidden></div>
+              </div>
+              <div class="settings-buttons">
+                <button id="geoip-update-btn" type="button" class="settings-mini-action primary-mini">Обновить базы сейчас</button>
+                <button id="geoip-toggle-urls" type="button" class="settings-mini-action">Источники баз ▾</button>
+              </div>
+              <div id="geoip-sources-panel" class="geoip-sources-panel" hidden>
+                <label class="settings-row settings-switch-row" for="geoip-autoupdate">
+                  <span class="settings-row-label"><strong>Автообновление правил</strong><small>Периодически проверять и скачивать свежие базы</small></span>
+                  <input id="geoip-autoupdate" type="checkbox" class="settings-switch" checked />
+                </label>
+                <div class="settings-row settings-language-row">
+                  <label class="settings-row-label" for="geoip-interval"><strong>Интервал автообновления</strong><small>Частота загрузки свежих баз</small></label>
+                  <select id="geoip-interval" class="settings-language-select">
+                    <option value="1">Каждый день</option>
+                    <option value="3">Каждые 3 дня</option>
+                    <option value="7" selected>Каждые 7 дней</option>
+                    <option value="14">Каждые 14 дней</option>
+                    <option value="30">Каждые 30 дней</option>
+                  </select>
+                </div>
+                <div class="settings-field-group">
+                  <label for="geoip-url-input"><strong>URL базы GeoIP (geoip.dat)</strong></label>
+                  <input id="geoip-url-input" type="url" class="settings-input" placeholder="https://..." spellcheck="false" />
+                </div>
+                <div class="settings-field-group">
+                  <label for="geosite-url-input"><strong>URL базы GeoSite (geosite.dat)</strong></label>
+                  <input id="geosite-url-input" type="url" class="settings-input" placeholder="https://..." spellcheck="false" />
+                </div>
+                <div class="settings-buttons">
+                  <button id="geoip-save-settings" type="button" class="settings-mini-action">Сохранить настройки</button>
+                  <button id="geoip-reset-urls" type="button" class="settings-mini-action text-btn">По умолчанию</button>
+                </div>
+              </div>
+              <p class="settings-caption">Трафик на домены .ru/.su/.рф и IP-адреса РФ направляется напрямую через провайдера без шифрования VPN.</p>
+            </section>
             <section class="settings-pane" aria-label="Диагностика">
               <button id="details-toggle" class="settings-pane-head settings-accordion" type="button" aria-expanded="false" disabled><span class="settings-pane-icon" aria-hidden="true">⌁</span><span class="settings-heading"><strong>Диагностика</strong><small>VPN, DNS, маршруты и события</small></span><span class="settings-chevron"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></button>
               <div id="details-content" class="details-content settings-diagnostics" hidden>

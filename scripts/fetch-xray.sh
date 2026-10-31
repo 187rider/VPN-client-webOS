@@ -2,6 +2,9 @@
 # Pin a known upstream release asset; no Xray download occurs on LG TVs.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -s "$ROOT/dist/payload/bin/xray" ]; then
+    exit 0
+fi
 VERSION='v26.10.21'
 ASSET='Xray-linux-arm32-v7a.zip'
 # Official release asset digest, not a mutable latest URL.

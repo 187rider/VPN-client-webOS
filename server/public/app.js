@@ -330,7 +330,7 @@
       if(name===tab)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');
     });
   }
-  function refresh(){if(!accessKey&&!csrf)return Promise.resolve();return Promise.all([api('profiles'),api('status')]).then(function(all){renderProfiles(all[0]);renderStatus(all[1]);visible('login',false);visible('dashboard',true);$('settings-trigger').disabled=false;visible('settings-trigger',true);$('add-toggle').disabled=false;$('details-toggle').disabled=false;lastKnownOnline=true;return all;}).catch(function(e){if(accessKey){alertUser(e.message,true);}throw e;});}
+  function refresh(){if(!accessKey&&!csrf)return Promise.resolve();return Promise.all([api('profiles'),api('status')]).then(function(all){renderProfiles(all[0]);renderStatus(all[1]);loadGeoIPStatus();visible('login',false);visible('dashboard',true);$('settings-trigger').disabled=false;visible('settings-trigger',true);$('add-toggle').disabled=false;$('details-toggle').disabled=false;lastKnownOnline=true;return all;}).catch(function(e){if(accessKey){alertUser(e.message,true);}throw e;});}
   function poll(){if((!accessKey&&!csrf)||polling||busy||$('dashboard').hidden)return;polling=true;api('status').then(function(s){lastKnownOnline=true;renderStatus(s);}).catch(function(){lastKnownOnline=false;$('panel-health').className='online-mini';$('panel-health').textContent='Связь потеряна';$('connection-state').textContent='Статус неизвестен';$('connection-detail').textContent='Не удалось получить состояние VPN';$('disconnect').disabled=true;visible('trial-hint',false);}).then(function(){polling=false;});}
   function connectTo(id){if(busy||!lastKnownOnline)return;if(currentStatus&&currentStatus.needsRecovery){displayError('Сначала восстановите сеть кнопкой в блоке состояния.');return;}var p=(allProfiles.items||[]).filter(function(x){return x.id===id;})[0];if(!p)return;
     if(currentStatus&&currentStatus.connected&&allProfiles.active===id){alertUser('Этот сервер уже подключён');return;}
@@ -451,7 +451,80 @@
   $('disconnect').onclick=disconnect;$('confirm').onclick=confirmTrial;$('retry').onclick=function(){connectTo(allProfiles.active);};
   $('add-toggle').onclick=function(){openModal('Добавить конфигурацию','import-view');$('import-message').textContent='';$('import-content').focus();};
   $('subs-add').onclick=function(){$('add-toggle').click();};
-  ['home','subscriptions','settings'].forEach(function(tab){$('nav-'+tab).onclick=function(){switchTab(tab);if(tab==='settings'){loadLogs();}window.scrollTo({top:0,behavior:'smooth'});};});
+  ['home','subscriptions','settings'].forEach(function(tab){$('nav-'+tab).onclick=function(){switchTab(tab);if(tab==='settings'){loadLogs();loadGeoIPStatus();}window.scrollTo({top:0,behavior:'smooth'});};});
+
+  var geoIPData=null;
+  function formatBytes(bytes){if(!bytes||bytes<=0)return 'нет';return (bytes/(1024*1024)).toFixed(1)+' МБ';}
+  function formatDate(isoStr){if(!isoStr)return '—';try{var d=new Date(isoStr);if(isNaN(d.getTime()))return isoStr;return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return isoStr;}}
+  function setGeoIPMessage(text,type){var el=$('geoip-status-msg');if(!el)return;if(!text){el.hidden=true;el.textContent='';el.className='geoip-status-msg';return;}el.hidden=false;el.className='geoip-status-msg '+(type||'info');el.textContent=text;}
+  function renderGeoIPStatus(d){
+    if(!d)return;geoIPData=d;
+    $('geoip-status-badge').textContent=d.enabled?'Активно':'Отключено';
+    $('geoip-status-badge').className=d.enabled?'settings-connected':'settings-connected error';
+    $('geoip-file-info').textContent=(d.geoipSize>0)?(formatBytes(d.geoipSize)+' ('+formatDate(d.geoipModified)+')'):'Не найдена';
+    $('geosite-file-info').textContent=(d.geositeSize>0)?(formatBytes(d.geositeSize)+' ('+formatDate(d.geositeModified)+')'):'Не найдена';
+    var lastCheckText='—';
+    if(d.lastSuccess){lastCheckText='Обновлено '+formatDate(d.lastSuccess);}
+    else if(d.lastCheck){lastCheckText='Проверено '+formatDate(d.lastCheck);}
+    if(d.lastStatus&&d.lastStatus!=='успешно обновлено'&&d.lastStatus!=='не проверялось'){lastCheckText+=' ('+d.lastStatus+')';}
+    $('geoip-last-check').textContent=lastCheckText;
+    $('geoip-autoupdate').checked=!!d.autoUpdate;
+    if(d.updateIntervalDays)$('geoip-interval').value=String(d.updateIntervalDays);
+    if(d.geoipUrl)$('geoip-url-input').value=d.geoipUrl;
+    if(d.geositeUrl)$('geosite-url-input').value=d.geositeUrl;
+    if(d.updating){
+      $('geoip-update-btn').disabled=true;
+      $('geoip-update-btn').textContent=d.updateText||'Обновление…';
+    }else{
+      $('geoip-update-btn').disabled=false;
+      $('geoip-update-btn').textContent='Обновить базы сейчас';
+    }
+  }
+  function loadGeoIPStatus(){
+    if(!accessKey&&!csrf)return Promise.resolve();
+    return api('geoip/status').then(function(d){renderGeoIPStatus(d);return d;}).catch(function(e){console.warn('GeoIP status error:',e);});
+  }
+  $('geoip-toggle-urls').onclick=function(){
+    var panel=$('geoip-sources-panel');
+    var isHidden=panel.hidden;
+    panel.hidden=!isHidden;
+    $('geoip-toggle-urls').textContent=isHidden?'Источники баз ▴':'Источники баз ▾';
+  };
+  $('geoip-update-btn').onclick=function(){
+    var btn=$('geoip-update-btn');
+    btn.disabled=true;
+    btn.textContent='Загрузка баз…';
+    setGeoIPMessage('Скачиваем свежие базы geoip.dat и geosite.dat…','info');
+    api('geoip/update','POST').then(function(res){
+      setGeoIPMessage(res.message||'Базы успешно обновлены!','success');
+      return loadGeoIPStatus();
+    }).catch(function(e){
+      setGeoIPMessage('Ошибка обновления: '+e.message,'error');
+      btn.disabled=false;
+      btn.textContent='Обновить базы сейчас';
+    });
+  };
+  $('geoip-save-settings').onclick=function(){
+    var autoUpdate=$('geoip-autoupdate').checked;
+    var interval=parseInt($('geoip-interval').value,10)||7;
+    var geoipUrl=$('geoip-url-input').value.trim();
+    var geositeUrl=$('geosite-url-input').value.trim();
+    setGeoIPMessage('Сохраняем настройки…','info');
+    api('geoip/settings','POST',{autoUpdate:autoUpdate,updateIntervalDays:interval,geoipUrl:geoipUrl,geositeUrl:geositeUrl}).then(function(res){
+      renderGeoIPStatus(res);
+      setGeoIPMessage('Настройки маршрутизации сохранены','success');
+    }).catch(function(e){
+      setGeoIPMessage('Ошибка: '+e.message,'error');
+    });
+  };
+  $('geoip-reset-urls').onclick=function(){
+    if(!geoIPData)return;
+    $('geoip-url-input').value=geoIPData.defaultGeoipUrl||'';
+    $('geosite-url-input').value=geoIPData.defaultGeositeUrl||'';
+    $('geoip-autoupdate').checked=true;
+    $('geoip-interval').value='7';
+    $('geoip-save-settings').click();
+  };
   $('modal-close').onclick=closeModal;
   $('modal-overlay').onclick=function(e){if(e.target===$('modal-overlay'))closeModal();};
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('modal-overlay').hidden){e.preventDefault();closeModal();}});
