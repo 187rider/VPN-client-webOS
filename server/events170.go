@@ -79,6 +79,10 @@ func recordEngineAction(action string, success bool) {
 func recordStartupObservation() {
 	s := status()
 	if s["needsRecovery"] == true {
+		if out, err := runEngine("stop"); err == nil && strings.Contains(out, "NETWORK_RESTORED=YES") {
+			recordEvent("startup_healed", "Остаточная сессия после перезагрузки автоматически очищена")
+			return
+		}
 		recordEvent("startup_warning", "После запуска панели обнаружено повреждённое состояние VPN; автовмешательство отключено")
 	} else if s["connected"] == true {
 		recordEvent("panel_started", "Панель перезапущена; VPN-сессия обнаружена")

@@ -43,11 +43,16 @@ func (a *app) connectProfile(w http.ResponseWriter, r *http.Request) {
 		errorOut(w, 404, "Сервер не найден")
 		return
 	}
-	if active() && p.Active == req.ID {
-		if state := status(); state["needsRecovery"] == true {
-			errorOut(w, 409, "Состояние VPN повреждено. Отключите VPN для восстановления сети.")
+	if active() && status()["needsRecovery"] == true {
+		recordEvent("auto_recovery", "Обнаружено повреждённое состояние; выполняется автоматическая очистка")
+		output, e := runEngine("stop")
+		if e != nil || active() || !strings.Contains(output, "NETWORK_RESTORED=YES") {
+			recordEvent("recovery_failed", "Не удалось автоматически очистить повреждённое состояние сети")
+			errorOut(w, 409, "Не удалось безопасно очистить повреждённое состояние сети. Попробуйте восстановить сеть вручную.")
 			return
 		}
+	}
+	if active() && p.Active == req.ID {
 		jsonResponse(w, 200, map[string]any{"ok": true, "unchanged": true, "status": status()})
 		return
 	}

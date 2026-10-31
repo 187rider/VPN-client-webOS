@@ -213,13 +213,18 @@ func runBootAutoConnectWithReason(reason string) {
 		log.Printf("[CVPN webOS] (%s) Ожидание %v для стабилизации сети и интерфейса...\n", reason, delay)
 		time.Sleep(delay)
 
-		if !canSendStartupToast() {
-			log.Printf("[CVPN webOS] (%s) Пропуск уведомления: недавно уже отображалось\n", reason)
-			return
+		st := status()
+		if st["needsRecovery"] == true || (st["connected"] != true && active()) {
+			log.Printf("[CVPN webOS] (%s) Обнаружена остаточная или повреждённая сессия; выполняется автоматическая очистка...\n", reason)
+			out, err := runEngine("stop")
+			if err == nil && strings.Contains(out, "NETWORK_RESTORED=YES") {
+				recordEvent("startup_healed", "Остаточная сессия после перезагрузки автоматически очищена")
+				log.Printf("[CVPN webOS] (%s) Остаточная сессия успешно очищена\n", reason)
+			}
 		}
 
 		if !cfg.VPNAutoConnect {
-			if cfg.NotifyOnStartup {
+			if cfg.NotifyOnStartup && canSendStartupToast() {
 				en := tvEN()
 				msg := "CVPN · VPN отключён"
 				if en {
@@ -236,7 +241,7 @@ func runBootAutoConnectWithReason(reason string) {
 		if err != nil || p.Active == "" {
 			mx.Unlock()
 			log.Printf("[CVPN webOS] (%s) Автоподключение: нет активного профиля\n", reason)
-			if cfg.NotifyOnStartup {
+			if cfg.NotifyOnStartup && canSendStartupToast() {
 				en := tvEN()
 				msg := "CVPN · Автозапуск: сервер не выбран"
 				if en {
@@ -251,9 +256,10 @@ func runBootAutoConnectWithReason(reason string) {
 		nodeName, nodeIP := getProfileNodeInfo(targetID)
 		mx.Unlock()
 
-		if active() {
+		st = status()
+		if st["connected"] == true && st["phase"] == "ready" && st["needsRecovery"] != true {
 			log.Printf("[CVPN webOS] (%s) VPN уже активен, отправка статуса узла %s (%s)...\n", reason, nodeName, nodeIP)
-			if cfg.NotifyOnStartup {
+			if cfg.NotifyOnStartup && canSendStartupToast() {
 				sendStartupStatusToast(nodeName, nodeIP, true, nil)
 			}
 			return
@@ -263,8 +269,9 @@ func runBootAutoConnectWithReason(reason string) {
 
 		mx.Lock()
 		defer mx.Unlock()
-		if active() {
-			if cfg.NotifyOnStartup {
+		st = status()
+		if st["connected"] == true && st["phase"] == "ready" && st["needsRecovery"] != true {
+			if cfg.NotifyOnStartup && canSendStartupToast() {
 				sendStartupStatusToast(nodeName, nodeIP, true, nil)
 			}
 			return
@@ -282,7 +289,7 @@ func runBootAutoConnectWithReason(reason string) {
 			if active() {
 				_, _ = runEngine("stop")
 			}
-			if cfg.NotifyOnStartup {
+			if cfg.NotifyOnStartup && canSendStartupToast() {
 				sendStartupStatusToast(nodeName, nodeIP, false, err)
 			}
 			return
@@ -298,7 +305,7 @@ func runBootAutoConnectWithReason(reason string) {
 		recordEvent("autostart", fmt.Sprintf("VPN подключён автоматически (%s) к узлу %s (%s)", reason, nodeName, nodeIP))
 		log.Printf("[CVPN webOS] VPN успешно подключён (%s) к %s (%s)\n", reason, nodeName, nodeIP)
 
-		if cfg.NotifyOnStartup {
+		if cfg.NotifyOnStartup && canSendStartupToast() {
 			sendStartupStatusToast(nodeName, nodeIP, true, nil)
 		}
 	}()

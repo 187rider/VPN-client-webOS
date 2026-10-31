@@ -119,3 +119,47 @@ func TestImportDedupAndGroups(t *testing.T) {
 		t.Fatalf("delete active group must fail: %d", got.Code)
 	}
 }
+
+func TestAutoRecoveryOnConnect(t *testing.T) {
+	oldBase := base
+	base = prepareFixture(t)
+	defer func() { base = oldBase }()
+	if err := bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range map[string]string{"active": "session", "phase": "ready", "mode": "persistent"} {
+		if err := os.WriteFile(path("state", k), []byte(v), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unhealthy := true
+	runtimeProbe = func() RuntimeHealth {
+		if unhealthy {
+			return RuntimeHealth{Healthy: false, Reason: "Missing TUN"}
+		}
+		return RuntimeHealth{Healthy: true}
+	}
+	if !status()["needsRecovery"].(bool) {
+		t.Fatal("expected needsRecovery before connect")
+	}
+	a := &app{key: strings.Repeat("z", 40)}
+	post := func(path, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", path, strings.NewReader(body))
+		r.Header.Set("X-CVPN-Key", a.key)
+		r.RemoteAddr = "127.0.0.1:12345"
+		a.api(w, r)
+		return w
+	}
+	unhealthy = false
+	got := post("/api/connect", `{"id":"installed"}`)
+	if got.Code != 200 {
+		t.Fatalf("connect failed during auto-recovery: %d: %s", got.Code, got.Body.String())
+	}
+	if !active() {
+		t.Fatal("expected active VPN after auto-recovery connect")
+	}
+	if status()["needsRecovery"] == true {
+		t.Fatal("did not expect needsRecovery after auto-recovery connect")
+	}
+}

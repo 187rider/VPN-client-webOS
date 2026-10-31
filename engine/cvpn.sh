@@ -194,15 +194,15 @@ probe() {
     say 'PROBE_1_VERIFIED_HTTPS_WITH_SYSTEM_DNS'
     attempt=1
     general_ok=0
-    while [ "$attempt" -le 2 ]; do
-        if curl -4 -fsS --noproxy '*' --connect-timeout 4 --max-time 12 \
+    while [ "$attempt" -le 3 ]; do
+        if curl -4 -fsS --noproxy '*' --connect-timeout 8 --max-time 15 \
             -o /dev/null 'https://example.com/' \
             > "$STATE/startup-fallback.out" 2> "$STATE/startup-fallback.err"; then
             general_ok=1
             break
         fi
         attempt=$((attempt + 1))
-        [ "$attempt" -le 2 ] && sleep 1
+        [ "$attempt" -le 3 ] && sleep 1
     done
     if [ "$general_ok" -ne 1 ]; then
         say 'GENERAL_HTTPS=FAILED (DNS, VPN transport or verified TLS)'
@@ -221,14 +221,14 @@ probe() {
     say 'PROBE_2_YOUTUBE_HTTPS'
     attempt=1
     youtube_ok=0
-    while [ "$attempt" -le 2 ]; do
-        if curl -4 -fsS -I --noproxy '*' --connect-timeout 4 --max-time 8 \
+    while [ "$attempt" -le 3 ]; do
+        if curl -4 -fsS -I --noproxy '*' --connect-timeout 8 --max-time 12 \
             "$TEST_URL" > "$STATE/youtube.out" 2> "$STATE/youtube.err"; then
             youtube_ok=1
             break
         fi
         attempt=$((attempt + 1))
-        [ "$attempt" -le 2 ] && sleep 1
+        [ "$attempt" -le 3 ] && sleep 1
     done
     if [ "$youtube_ok" -eq 1 ]; then
         say 'YOUTUBE_HTTPS=OK'

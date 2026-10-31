@@ -332,7 +332,7 @@
   }
   function refresh(){if(!accessKey&&!csrf)return Promise.resolve();return Promise.all([api('profiles'),api('status')]).then(function(all){renderProfiles(all[0]);renderStatus(all[1]);loadGeoIPStatus();loadAutostartStatus();visible('login',false);visible('dashboard',true);$('settings-trigger').disabled=false;visible('settings-trigger',true);$('add-toggle').disabled=false;$('details-toggle').disabled=false;lastKnownOnline=true;return all;}).catch(function(e){if(accessKey){alertUser(e.message,true);}throw e;});}
   function poll(){if((!accessKey&&!csrf)||polling||busy||$('dashboard').hidden)return;polling=true;api('status').then(function(s){lastKnownOnline=true;renderStatus(s);}).catch(function(){lastKnownOnline=false;$('panel-health').className='online-mini';$('panel-health').textContent='Связь потеряна';$('connection-state').textContent='Статус неизвестен';$('connection-detail').textContent='Не удалось получить состояние VPN';$('disconnect').disabled=true;visible('trial-hint',false);}).then(function(){polling=false;});}
-  function connectTo(id){if(busy||!lastKnownOnline)return;if(currentStatus&&currentStatus.needsRecovery){displayError('Сначала восстановите сеть кнопкой в блоке состояния.');return;}var p=(allProfiles.items||[]).filter(function(x){return x.id===id;})[0];if(!p)return;
+  function connectTo(id){if(busy||!lastKnownOnline)return;var p=(allProfiles.items||[]).filter(function(x){return x.id===id;})[0];if(!p)return;
     if(currentStatus&&currentStatus.connected&&allProfiles.active===id){alertUser('Этот сервер уже подключён');return;}
     errorUntil=0;pendingAction='connecting';pendingTarget=p.name;setBusy(true);renderStatus(currentStatus||{connected:false});
     api('connect','POST',{id:id}).then(function(result){
