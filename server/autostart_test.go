@@ -16,8 +16,8 @@ func TestAutostartConfigReadWrite(t *testing.T) {
 	if cfg.VPNAutoConnect {
 		t.Fatal("expected VPNAutoConnect false by default")
 	}
-	if cfg.DelaySeconds != 15 {
-		t.Fatalf("expected default 15s delay, got %d", cfg.DelaySeconds)
+	if cfg.DelaySeconds != 30 {
+		t.Fatalf("expected default 30s delay, got %d", cfg.DelaySeconds)
 	}
 	if !cfg.NotifyOnStartup {
 		t.Fatal("expected NotifyOnStartup true by default")

@@ -43,7 +43,7 @@ func isHookInstalled() bool {
 func readAutostartConfig() autostartConfig {
 	cfg := autostartConfig{
 		VPNAutoConnect:   false,
-		DelaySeconds:     15,
+		DelaySeconds:     30,
 		PanelHookEnabled: isHookInstalled(),
 		NotifyOnStartup:  true,
 		LastStatus:       "не выполнялся",
@@ -53,7 +53,7 @@ func readAutostartConfig() autostartConfig {
 		_ = json.Unmarshal(data, &cfg)
 	}
 	if cfg.DelaySeconds < 5 || cfg.DelaySeconds > 120 {
-		cfg.DelaySeconds = 15
+		cfg.DelaySeconds = 30
 	}
 	cfg.PanelHookEnabled = isHookInstalled()
 	return cfg
@@ -115,11 +115,16 @@ func sendStartupNotification(msg string) bool {
 		r := []rune(msg)
 		msg = string(r[:139]) + "…"
 	}
-	if err := notifySystemToast(msg); err != nil {
-		log.Printf("[CVPN webOS] status notification unavailable: %v", err)
-		return false
+	log.Printf("[CVPN webOS] Отправка стартового уведомления: %q\n", msg)
+	for attempt := 1; attempt <= 3; attempt++ {
+		if err := notifySystemToast(msg); err != nil {
+			log.Printf("[CVPN webOS] попытка %d отправки уведомления завершилась ошибкой: %v", attempt, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		return true
 	}
-	return true
+	return false
 }
 
 func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
@@ -149,6 +154,14 @@ func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
 func runBootAutoConnect() {
 	go func() {
 		cfg := readAutostartConfig()
+
+		delay := time.Duration(cfg.DelaySeconds) * time.Second
+		if delay < 5*time.Second {
+			delay = 30 * time.Second
+		}
+		log.Printf("[CVPN webOS] Ожидание %v перед автозапуском для стабилизации системы и сети...\n", delay)
+		time.Sleep(delay)
+
 		if !cfg.VPNAutoConnect {
 			if cfg.NotifyOnStartup {
 				en := tvEN()
@@ -161,12 +174,6 @@ func runBootAutoConnect() {
 			}
 			return
 		}
-
-		delay := time.Duration(cfg.DelaySeconds) * time.Second
-		if delay < 5*time.Second {
-			delay = 10 * time.Second
-		}
-		time.Sleep(delay)
 
 		mx.Lock()
 		p, err := readProfiles()
@@ -275,7 +282,7 @@ func (a *app) handleAutostartSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.DelaySeconds < 5 || req.DelaySeconds > 120 {
-		req.DelaySeconds = 15
+		req.DelaySeconds = 30
 	}
 
 	autostartLock.Lock()

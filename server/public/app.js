@@ -474,7 +474,7 @@
   }
   function saveAutostartSettings(){
     var vpn=$('autostart-vpn-switch').checked;
-    var delay=parseInt($('autostart-delay').value,10)||15;
+    var delay=parseInt($('autostart-delay').value,10)||30;
     var hook=$('autostart-panel-switch').checked;
     var notify=$('autostart-notify-switch').checked;
     $('autostart-details').hidden=!vpn;
