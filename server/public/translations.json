@@ -250,5 +250,21 @@
   "URL базы GeoSite (geosite.dat)": "GeoSite database URL (geosite.dat)",
   "Сохранить настройки": "Save settings",
   "По умолчанию": "Reset defaults",
-  "Трафик на домены .ru/.su/.рф и IP-адреса РФ направляется напрямую через провайдера без шифрования VPN.": "Traffic to .ru/.su/.рф domains and Russian IP addresses is routed directly via ISP without VPN encryption."
+  "Трафик на домены .ru/.su/.рф и IP-адреса РФ направляется напрямую через провайдера без шифрования VPN.": "Traffic to .ru/.su/.рф domains and Russian IP addresses is routed directly via ISP without VPN encryption.",
+  "Автозапуск": "Autostart",
+  "Поведение при включении телевизора": "Behavior on TV power on",
+  "Автоподключение VPN": "VPN auto-connect",
+  "Автоматически подключать активный сервер при старте ТВ": "Automatically connect active server on TV power on",
+  "Задержка подключения": "Connection delay",
+  "Ожидание подключения ТВ к домашней сети": "Wait for TV to connect to home network",
+  "5 секунд": "5 seconds",
+  "10 секунд": "10 seconds",
+  "15 секунд (рекомендуется)": "15 seconds (recommended)",
+  "25 секунд": "25 seconds",
+  "40 секунд": "40 seconds",
+  "Сервер для автозапуска:": "Target server for autostart:",
+  "Последний запуск:": "Last run:",
+  "Служба Homebrew init.d": "Homebrew init.d service",
+  "Запуск фоновой панели управления при загрузке webOS": "Launch background control panel on webOS boot",
+  "При включённом автоподключении телевизор будет защищён сразу после включения. При сбое сети VPN выполнит безопасный откат.": "With auto-connect enabled, TV is protected immediately after powering on. In case of network failure, VPN performs a safe rollback."
 }

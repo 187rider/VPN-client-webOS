@@ -330,7 +330,7 @@
       if(name===tab)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');
     });
   }
-  function refresh(){if(!accessKey&&!csrf)return Promise.resolve();return Promise.all([api('profiles'),api('status')]).then(function(all){renderProfiles(all[0]);renderStatus(all[1]);loadGeoIPStatus();visible('login',false);visible('dashboard',true);$('settings-trigger').disabled=false;visible('settings-trigger',true);$('add-toggle').disabled=false;$('details-toggle').disabled=false;lastKnownOnline=true;return all;}).catch(function(e){if(accessKey){alertUser(e.message,true);}throw e;});}
+  function refresh(){if(!accessKey&&!csrf)return Promise.resolve();return Promise.all([api('profiles'),api('status')]).then(function(all){renderProfiles(all[0]);renderStatus(all[1]);loadGeoIPStatus();loadAutostartStatus();visible('login',false);visible('dashboard',true);$('settings-trigger').disabled=false;visible('settings-trigger',true);$('add-toggle').disabled=false;$('details-toggle').disabled=false;lastKnownOnline=true;return all;}).catch(function(e){if(accessKey){alertUser(e.message,true);}throw e;});}
   function poll(){if((!accessKey&&!csrf)||polling||busy||$('dashboard').hidden)return;polling=true;api('status').then(function(s){lastKnownOnline=true;renderStatus(s);}).catch(function(){lastKnownOnline=false;$('panel-health').className='online-mini';$('panel-health').textContent='Связь потеряна';$('connection-state').textContent='Статус неизвестен';$('connection-detail').textContent='Не удалось получить состояние VPN';$('disconnect').disabled=true;visible('trial-hint',false);}).then(function(){polling=false;});}
   function connectTo(id){if(busy||!lastKnownOnline)return;if(currentStatus&&currentStatus.needsRecovery){displayError('Сначала восстановите сеть кнопкой в блоке состояния.');return;}var p=(allProfiles.items||[]).filter(function(x){return x.id===id;})[0];if(!p)return;
     if(currentStatus&&currentStatus.connected&&allProfiles.active===id){alertUser('Этот сервер уже подключён');return;}
@@ -451,7 +451,39 @@
   $('disconnect').onclick=disconnect;$('confirm').onclick=confirmTrial;$('retry').onclick=function(){connectTo(allProfiles.active);};
   $('add-toggle').onclick=function(){openModal('Добавить конфигурацию','import-view');$('import-message').textContent='';$('import-content').focus();};
   $('subs-add').onclick=function(){$('add-toggle').click();};
-  ['home','subscriptions','settings'].forEach(function(tab){$('nav-'+tab).onclick=function(){switchTab(tab);if(tab==='settings'){loadLogs();loadGeoIPStatus();}window.scrollTo({top:0,behavior:'smooth'});};});
+  ['home','subscriptions','settings'].forEach(function(tab){$('nav-'+tab).onclick=function(){switchTab(tab);if(tab==='settings'){loadLogs();loadGeoIPStatus();loadAutostartStatus();}window.scrollTo({top:0,behavior:'smooth'});};});
+
+  function renderAutostartStatus(d){
+    if(!d)return;
+    $('autostart-vpn-switch').checked=!!d.vpnAutoConnect;
+    $('autostart-details').hidden=!d.vpnAutoConnect;
+    $('autostart-badge').textContent=d.vpnAutoConnect?'Активно':'Отключено';
+    $('autostart-badge').className=d.vpnAutoConnect?'settings-connected':'settings-connected muted';
+    if(d.delaySeconds)$('autostart-delay').value=String(d.delaySeconds);
+    $('autostart-target-server').textContent=d.activeProfile||'Не выбран';
+    $('autostart-panel-switch').checked=!!d.panelHookEnabled;
+    $('autostart-last-run').textContent=d.lastAutoConnect?(formatDate(d.lastAutoConnect)+' ('+d.lastStatus+')'):'—';
+  }
+  function loadAutostartStatus(){
+    if(!accessKey&&!csrf)return Promise.resolve();
+    return api('autostart').then(function(d){renderAutostartStatus(d);return d;}).catch(function(e){console.warn('Autostart error:',e);});
+  }
+  function saveAutostartSettings(){
+    var vpn=$('autostart-vpn-switch').checked;
+    var delay=parseInt($('autostart-delay').value,10)||15;
+    var hook=$('autostart-panel-switch').checked;
+    $('autostart-details').hidden=!vpn;
+    return api('autostart','POST',{vpnAutoConnect:vpn,delaySeconds:delay,panelHookEnabled:hook}).then(function(res){
+      renderAutostartStatus(res);
+      var msg=$('autostart-status-msg');
+      if(msg){msg.hidden=false;msg.className='geoip-status-msg success';msg.textContent='Настройки автозапуска сохранены';setTimeout(function(){msg.hidden=true;},4000);}
+    }).catch(function(e){
+      alertUser('Ошибка автозапуска: '+e.message,true);
+    });
+  }
+  $('autostart-vpn-switch').onchange=saveAutostartSettings;
+  $('autostart-delay').onchange=saveAutostartSettings;
+  $('autostart-panel-switch').onchange=saveAutostartSettings;
 
   var geoIPData=null;
   function formatBytes(bytes){if(!bytes||bytes<=0)return 'нет';return (bytes/(1024*1024)).toFixed(1)+' МБ';}

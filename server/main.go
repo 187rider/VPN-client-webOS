@@ -433,6 +433,17 @@ func (a *app) api(w http.ResponseWriter, r *http.Request) {
 		a.handleGeoIPManualUpdate(w, r)
 		return
 	}
+	if r.URL.Path == "/api/autostart" && r.Method == "GET" {
+		a.handleAutostartStatus(w, r)
+		return
+	}
+	if r.URL.Path == "/api/autostart" {
+		if !requirePost(w, r) {
+			return
+		}
+		a.handleAutostartSave(w, r)
+		return
+	}
 	errorOut(w, 404, "unknown endpoint")
 }
 func (a *app) engine(w http.ResponseWriter, r *http.Request) {
@@ -1202,6 +1213,7 @@ func main() {
 		log.Fatal(e)
 	}
 	startGeoIPAutoUpdater()
+	runBootAutoConnect()
 	keyBytes, err := os.ReadFile(path("webui", "access.key"))
 	fail(err)
 	key := strings.TrimSpace(string(keyBytes))
