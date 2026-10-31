@@ -10,7 +10,7 @@ BASE=/media/developer/cvpn-webos
 WEB="$BASE/webui"
 HOOK=/var/lib/webosbrew/init.d/90-cvpn-webos
 STAMP="$WEB/state/bundle.sha256"
-FILES='bin/xray bin/panel bin/engine bin/worker bin/boot-hook bin/start-panel bin/stop-panel'
+FILES='bin/xray bin/panel bin/engine bin/worker bin/boot-hook bin/start-panel bin/stop-panel bin/geoip.dat bin/geosite.dat'
 refuse() { echo "REFUSED=$1" >&2; exit 1; }
 root_check() {
     [ "$(id -u)" = 0 ] || refuse root_required
@@ -89,7 +89,7 @@ idle() {
         route=$(ip -4 route show "$block") || refuse routes_unreadable
         case "$route" in *'dev cvpn0'*) refuse vpn_routes_present;; esac
     done
-    if awk '$2=="/var/lib/misc/resolv.conf" {found=1} END {exit(!found)}' /proc/mounts; then
+    if [ -r /proc/mounts ] && awk '$2=="/var/lib/misc/resolv.conf" {found=1} END {exit(!found)}' /proc/mounts; then
         refuse resolver_bind_present
     fi
     # Safe stale-lock recovery is limited to the local CVPN lock and only
@@ -112,12 +112,13 @@ restore_on_exit() {
     trap - 0
     if [ "$code" -ne 0 ] && [ "${RESTORE_ON_EXIT:-0}" = 1 ]; then
         if [ -x "$WEB/stop-panel.sh" ]; then sh "$WEB/stop-panel.sh" >/dev/null 2>&1 || true; fi
-        for item in xray panel engine worker boot-hook start-panel stop-panel; do
+        for item in xray panel engine worker boot-hook start-panel stop-panel geoip geosite; do
             case "$item" in
                 xray) dst="$BASE/bin/xray";; panel) dst="$WEB/bin/cvpn-webos-panel";;
                 engine) dst="$BASE/bin/cvpn.sh";; worker) dst="$WEB/recovery/recovery-worker.sh";;
                 boot-hook) dst="$WEB/recovery/boot-hook.sh";;
                 start-panel|stop-panel) dst="$WEB/$item.sh";;
+                geoip) dst="$BASE/bin/geoip.dat";; geosite) dst="$BASE/bin/geosite.dat";;
             esac
             if [ -s "$backup/$item" ]; then cp -p "$backup/$item" "$dst" || true;
             else rm -f "$dst" || true; fi
@@ -178,8 +179,8 @@ install() {
     backup="$WEB/state/backup-allinone-$(date -u +%Y%m%d%H%M%S)-$$"
     mkdir -m 700 "$backup"
     [ ! -L "$HOOK" ] || readlink "$HOOK" > "$backup/old-hook"
-    # Only executables are backed up; user credentials/profiles are untouched.
-    for item in xray panel engine worker boot-hook start-panel stop-panel; do
+    # Only executables and geo data are backed up; user credentials/profiles are untouched.
+    for item in xray panel engine worker boot-hook start-panel stop-panel geoip geosite; do
         case "$item" in
             xray) dst="$BASE/bin/xray";;
             panel) dst="$WEB/bin/cvpn-webos-panel";;
@@ -187,24 +188,32 @@ install() {
             worker) dst="$WEB/recovery/recovery-worker.sh";;
             boot-hook) dst="$WEB/recovery/boot-hook.sh";;
             start-panel|stop-panel) dst="$WEB/$item.sh";;
+            geoip) dst="$BASE/bin/geoip.dat";;
+            geosite) dst="$BASE/bin/geosite.dat";;
         esac
         [ ! -f "$dst" ] || cp -p "$dst" "$backup/$item"
     done
     RESTORE_ON_EXIT=1
     if [ -x "$WEB/stop-panel.sh" ]; then sh "$WEB/stop-panel.sh" || refuse panel_stop_failed; fi
-    for item in xray panel engine worker boot-hook start-panel stop-panel; do
+    for item in xray panel engine worker boot-hook start-panel stop-panel geoip geosite; do
         case "$item" in
-            xray) dst="$BASE/bin/xray";;
-            panel) dst="$WEB/bin/cvpn-webos-panel";;
-            engine) dst="$BASE/bin/cvpn.sh";;
-            worker) dst="$WEB/recovery/recovery-worker.sh";;
-            boot-hook) dst="$WEB/recovery/boot-hook.sh";;
-            start-panel|stop-panel) dst="$WEB/$item.sh";;
+            xray) src="$PAYLOAD/bin/xray"; dst="$BASE/bin/xray";;
+            panel) src="$PAYLOAD/bin/panel"; dst="$WEB/bin/cvpn-webos-panel";;
+            engine) src="$PAYLOAD/bin/engine"; dst="$BASE/bin/cvpn.sh";;
+            worker) src="$PAYLOAD/bin/worker"; dst="$WEB/recovery/recovery-worker.sh";;
+            boot-hook) src="$PAYLOAD/bin/boot-hook"; dst="$WEB/recovery/boot-hook.sh";;
+            start-panel|stop-panel) src="$PAYLOAD/bin/$item"; dst="$WEB/$item.sh";;
+            geoip) src="$PAYLOAD/bin/geoip.dat"; dst="$BASE/bin/geoip.dat";;
+            geosite) src="$PAYLOAD/bin/geosite.dat"; dst="$BASE/bin/geosite.dat";;
         esac
-        cp "$PAYLOAD/bin/$item" "$dst.next.$$" || refuse payload_copy_failed
+        cp "$src" "$dst.next.$$" || refuse payload_copy_failed
         chmod 700 "$dst.next.$$" || refuse payload_permissions_failed
         mv -f "$dst.next.$$" "$dst" || refuse payload_commit_failed
     done
+    if [ ! -s "$BASE/config/client.json" ] && [ -s "$PAYLOAD/client-template.json" ]; then
+        cp "$PAYLOAD/client-template.json" "$BASE/config/client.json"
+        chmod 600 "$BASE/config/client.json"
+    fi
     if [ ! -s "$WEB/access.key" ]; then
         [ ! -e "$WEB/access.key" ] || refuse existing_access_key_corrupt
         key=$(od -An -v -tx1 -N32 /dev/urandom | tr -d ' \n')

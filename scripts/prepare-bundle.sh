@@ -12,5 +12,6 @@ cp "$ROOT/recovery/boot-hook.sh" "$D/bin/boot-hook"
 cp "$ROOT/scripts/start-panel.sh" "$D/bin/start-panel"
 cp "$ROOT/scripts/stop-panel.sh" "$D/bin/stop-panel"
 cp "$ROOT/scripts/install-bundled.sh" "$D/install.sh"
+cp "$ROOT/server/config-template.json" "$D/client-template.json"
 chmod 755 "$D/bin/boot-hook" "$D/install.sh"
-(cd "$D" && sha256sum bin/xray bin/panel bin/engine bin/worker bin/boot-hook bin/start-panel bin/stop-panel > SHA256SUMS)
+(cd "$D" && sha256sum bin/xray bin/panel bin/engine bin/worker bin/boot-hook bin/start-panel bin/stop-panel bin/geoip.dat bin/geosite.dat > SHA256SUMS)

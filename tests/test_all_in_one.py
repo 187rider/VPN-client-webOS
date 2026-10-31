@@ -52,6 +52,8 @@ class AllInOneInstaller(unittest.TestCase):
             'boot-hook':'#!/bin/sh\necho boot\n',
             'start-panel':'#!/bin/sh\necho PANEL_RUNNING=YES\n',
             'stop-panel':'#!/bin/sh\necho PANEL_STOP_REQUESTED=YES\n',
+            'geoip.dat':'mock-geoip\n',
+            'geosite.dat':'mock-geosite\n',
         }
         for name,src in files.items():
             out=self.payload/'bin'/name
@@ -75,7 +77,7 @@ class AllInOneInstaller(unittest.TestCase):
         self.assertIn('BUNDLE_READY=YES',self.run_it('status').stdout)
         self.assertIn('BUNDLE_READY=YES',self.run_it('install').stdout)
         hook=self.hb/'init.d/90-cvpn-webos'
-        self.assertEqual(hook.resolve(),self.payload/'bin/boot-hook')
+        self.assertEqual(hook.resolve(),(self.payload/'bin/boot-hook').resolve())
         self.assertEqual((self.base/'webui/access.key').stat().st_mode & 0o777,0o600)
 
     def test_preserves_profile_and_key_during_upgrade(self):

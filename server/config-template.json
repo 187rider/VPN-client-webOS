@@ -8,6 +8,11 @@
         "name": "cvpn0",
         "mtu": 1500,
         "autoOutboundsInterface": "eth0"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"],
+        "routeOnly": true
       }
     }
   ],
@@ -16,6 +21,38 @@
       "tag": "cvpn-proxy",
       "protocol": "vless",
       "settings": {"vnext": []}
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom"
     }
-  ]
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "ip": [
+          "geoip:private",
+          "geoip:ru"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "domain": [
+          "domain:ru",
+          "domain:su",
+          "domain:xn--p1ai",
+          "geosite:category-ru"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "cvpn-proxy",
+        "network": "tcp,udp"
+      }
+    ]
+  }
 }
