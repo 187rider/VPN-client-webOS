@@ -274,6 +274,7 @@
   "Уведомление на экране ТВ": "On-screen TV notification",
   "Показывать статус узла, IP и адрес веб-панели при запуске": "Show node status, IP and web panel address on startup",
   "Показывать статус подключения узла с IP при запуске": "Show node connection status with IP on startup",
+  "Проверить на ТВ": "Test on TV",
   "Последний запуск:": "Last run:",
   "Служба Homebrew init.d": "Homebrew init.d service",
   "Запуск фоновой панели управления при загрузке webOS": "Launch background control panel on webOS boot",

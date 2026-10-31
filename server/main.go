@@ -437,6 +437,13 @@ func (a *app) api(w http.ResponseWriter, r *http.Request) {
 		a.handleAutostartStatus(w, r)
 		return
 	}
+	if r.URL.Path == "/api/autostart/test-notify" {
+		if !requirePost(w, r) {
+			return
+		}
+		a.handleAutostartTestNotify(w, r)
+		return
+	}
 	if r.URL.Path == "/api/autostart" {
 		if !requirePost(w, r) {
 			return

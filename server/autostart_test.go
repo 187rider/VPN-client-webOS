@@ -108,16 +108,28 @@ func TestStartupNotificationWithWebAddress(t *testing.T) {
 	setupTestBase(t)
 
 	var intercepted []string
+	var alertIntercepted []string
 	prev := notifySystemToast
+	prevAlert := notifySystemAlert
 	notifySystemToast = func(msg string) error {
 		intercepted = append(intercepted, msg)
 		return nil
 	}
-	t.Cleanup(func() { notifySystemToast = prev })
+	notifySystemAlert = func(title, msg string, d time.Duration) error {
+		alertIntercepted = append(alertIntercepted, msg)
+		return nil
+	}
+	t.Cleanup(func() {
+		notifySystemToast = prev
+		notifySystemAlert = prevAlert
+	})
 
 	sendStartupStatusToast("test-node", "10.0.0.1", true, nil)
 	if len(intercepted) == 0 {
 		t.Fatal("expected at least 1 notification message intercepted")
+	}
+	if len(alertIntercepted) == 0 {
+		t.Fatal("expected at least 1 alert message intercepted")
 	}
 	last := intercepted[len(intercepted)-1]
 	if !strings.Contains(last, "test-node") || !strings.Contains(last, "10.0.0.1") {
@@ -125,6 +137,46 @@ func TestStartupNotificationWithWebAddress(t *testing.T) {
 	}
 	if !strings.Contains(last, ":8765") {
 		t.Fatalf("missing webserver port/address in toast: %q", last)
+	}
+}
+
+func TestAutostartTestNotifyAPI(t *testing.T) {
+	setupTestBase(t)
+
+	p := profilesFile{Active: "node1", Items: []Profile{{ID: "node1", Name: "Server DE", Address: "1.2.3.4"}}}
+	if err := writeProfiles(p); err != nil {
+		t.Fatal(err)
+	}
+
+	var alertCount int
+	prevAlert := notifySystemAlert
+	prevToast := notifySystemToast
+	notifySystemAlert = func(title, msg string, d time.Duration) error {
+		alertCount++
+		return nil
+	}
+	notifySystemToast = func(msg string) error {
+		return nil
+	}
+	t.Cleanup(func() {
+		notifySystemAlert = prevAlert
+		notifySystemToast = prevToast
+	})
+
+	key := strings.Repeat("k", 48)
+	a := &app{key: key}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/autostart/test-notify", bytes.NewReader([]byte("{}")))
+	req.Header.Set("X-CVPN-Key", key)
+	req.RemoteAddr = "127.0.0.1:5555"
+	w := httptest.NewRecorder()
+	a.api(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if alertCount == 0 {
+		t.Fatal("expected alertCount > 0")
 	}
 }
 

@@ -118,15 +118,24 @@ func sendStartupNotification(msg string) bool {
 		msg = string(r[:139]) + "…"
 	}
 	log.Printf("[CVPN webOS] Отправка стартового уведомления: %q\n", msg)
+
+	// Display prominent Alert overlay with 15s auto-dismiss so it cannot be missed on screen
+	alertErr := notifySystemAlert("CVPN webOS", msg, 15*time.Second)
+	if alertErr != nil {
+		log.Printf("[CVPN webOS] createAlert error: %v, falling back to toast", alertErr)
+	}
+
+	toastSuccess := false
 	for attempt := 1; attempt <= 3; attempt++ {
 		if err := notifySystemToast(msg); err != nil {
 			log.Printf("[CVPN webOS] попытка %d отправки уведомления завершилась ошибкой: %v", attempt, err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		return true
+		toastSuccess = true
+		break
 	}
-	return false
+	return alertErr == nil || toastSuccess
 }
 
 func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
@@ -299,6 +308,11 @@ func runBootAutoConnect() {
 	runBootAutoConnectWithReason("boot")
 }
 
+func isTVPowerActive(st string) bool {
+	st = strings.TrimSpace(st)
+	return strings.EqualFold(st, "Active")
+}
+
 func startPowerStateMonitor(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(3 * time.Second)
@@ -306,7 +320,7 @@ func startPowerStateMonitor(ctx context.Context) {
 
 		wasStandby := false
 		initState := queryTVPower()
-		if initState != "" && initState != "Active" {
+		if initState != "" && !isTVPowerActive(initState) {
 			wasStandby = true
 		}
 
@@ -319,7 +333,7 @@ func startPowerStateMonitor(ctx context.Context) {
 				if st == "" {
 					continue
 				}
-				if st != "Active" {
+				if !isTVPowerActive(st) {
 					if !wasStandby {
 						log.Printf("[CVPN webOS] ТВ перешёл в режим сна/ожидания (powerState: %s)\n", st)
 					}
@@ -392,4 +406,26 @@ func (a *app) handleAutostartSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.handleAutostartStatus(w, r)
+}
+
+func (a *app) handleAutostartTestNotify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorOut(w, http.StatusMethodNotAllowed, "Только POST")
+		return
+	}
+
+	p, _ := readProfiles()
+	targetID := p.Active
+	nodeName, nodeIP := getProfileNodeInfo(targetID)
+	isConn := active()
+
+	sendStartupStatusToast(nodeName, nodeIP, isConn, nil)
+
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"node":    nodeName,
+		"ip":      nodeIP,
+		"active":  isConn,
+		"message": "Уведомление отправлено на ТВ",
+	})
 }

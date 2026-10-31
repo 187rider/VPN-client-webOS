@@ -33,6 +33,7 @@ type observedIP struct {
 }
 
 var notifySystemToast = systemStatusToast
+var notifySystemAlert = systemStartupAlert
 var lookupObservedIP = observePublicIPv4
 
 func noticeState() vpnNoticeState {
@@ -437,6 +438,66 @@ func systemStatusToast(message string) error {
 	plain, _ := json.Marshal(map[string]any{"sourceId": "su.cvpn.webos", "message": message,
 		"noaction": true, "persistent": false})
 	return sendLunaToast(ctx, binary, plain)
+}
+
+func systemStartupAlert(title, message string, autoClose time.Duration) error {
+	binary, err := lunaSendExecutable()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]any{
+		"sourceId": "su.cvpn.webos",
+		"title":    title,
+		"message":  message,
+		"modal":    false,
+		"buttons": []map[string]any{
+			{"label": "OK"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binary, "-n", "1", "-f", "-a",
+		"com.webos.service.secondscreen.gateway", "luna://com.webos.notification/createAlert", string(payload))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		cmd2 := exec.CommandContext(ctx, binary, "-n", "1", "-f",
+			"luna://com.webos.notification/createAlert", string(payload))
+		out2, err2 := cmd2.CombinedOutput()
+		if err2 != nil {
+			return fmt.Errorf("createAlert failed: %w (fallback: %v, out: %s)", err, err2, string(out2))
+		}
+		out = out2
+	}
+
+	var res struct {
+		ReturnValue bool   `json:"returnValue"`
+		AlertID     string `json:"alertId"`
+		ErrorText   string `json:"errorText"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		return fmt.Errorf("createAlert unmarshal error: %w (out: %s)", err, string(out))
+	}
+	if !res.ReturnValue || res.AlertID == "" {
+		return fmt.Errorf("createAlert rejected: %s", res.ErrorText)
+	}
+
+	if autoClose > 0 {
+		go func(alertID string, d time.Duration) {
+			time.Sleep(d)
+			closeCtx, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer closeCancel()
+			closePayload, _ := json.Marshal(map[string]any{"alertId": alertID})
+			_ = exec.CommandContext(closeCtx, binary, "-n", "1", "-f", "-a",
+				"com.webos.service.secondscreen.gateway", "luna://com.webos.notification/closeAlert", string(closePayload)).Run()
+		}(res.AlertID, autoClose)
+	}
+
+	return nil
 }
 
 // Foreground API requests announce their result immediately. The observer

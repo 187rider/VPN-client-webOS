@@ -491,6 +491,25 @@
   $('autostart-notify-switch').onchange=saveAutostartSettings;
   $('autostart-panel-switch').onchange=saveAutostartSettings;
 
+  var testNotifyBtn=$('autostart-test-notify-btn');
+  if(testNotifyBtn){
+    testNotifyBtn.onclick=function(){
+      var statusEl=$('autostart-test-notify-status');
+      testNotifyBtn.disabled=true;
+      if(statusEl){statusEl.textContent='Отправка...';statusEl.className='muted';}
+      api('autostart/test-notify','POST',{}).then(function(){
+        if(statusEl){statusEl.textContent='Уведомление показано на ТВ';statusEl.className='success';}
+      }).catch(function(err){
+        if(statusEl){statusEl.textContent='Ошибка: '+(err.message||err);statusEl.className='error';}
+      }).finally(function(){
+        setTimeout(function(){
+          testNotifyBtn.disabled=false;
+          if(statusEl)statusEl.textContent='';
+        },4000);
+      });
+    };
+  }
+
   var geoIPData=null;
   function formatBytes(bytes){if(!bytes||bytes<=0)return 'нет';return (bytes/(1024*1024)).toFixed(1)+' МБ';}
   function formatDate(isoStr){if(!isoStr)return '—';try{var d=new Date(isoStr);if(isNaN(d.getTime()))return isoStr;return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return isoStr;}}

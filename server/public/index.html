@@ -124,6 +124,10 @@
                 <span class="settings-row-label"><strong>Уведомление на экране ТВ</strong><small>Показывать статус узла, IP и адрес веб-панели при запуске</small></span>
                 <input id="autostart-notify-switch" type="checkbox" class="settings-switch" checked />
               </label>
+              <div class="settings-row settings-notify-test-row" style="padding-top:0;display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                <button type="button" id="autostart-test-notify-btn" class="btn btn-secondary btn-sm" style="font-size:12px;padding:6px 14px">Проверить на ТВ</button>
+                <span id="autostart-test-notify-status" class="muted" style="font-size:12px"></span>
+              </div>
               <label class="settings-row settings-switch-row" for="autostart-panel-switch">
                 <span class="settings-row-label"><strong>Служба Homebrew init.d</strong><small>Запуск фоновой панели управления при загрузке webOS</small></span>
                 <input id="autostart-panel-switch" type="checkbox" class="settings-switch" checked />
