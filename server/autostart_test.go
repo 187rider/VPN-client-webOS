@@ -74,6 +74,9 @@ func TestAutostartAPI(t *testing.T) {
 	if statusResp["activeProfile"] != "Server DE" || statusResp["activeProfileIp"] != "1.2.3.4" {
 		t.Fatalf("unexpected profile info: %#v", statusResp)
 	}
+	if _, ok := statusResp["webAddress"]; !ok {
+		t.Fatal("expected webAddress in autostart status response")
+	}
 
 	// 2. POST /api/autostart
 	body := []byte(`{"vpnAutoConnect":true,"delaySeconds":20,"panelHookEnabled":true,"notifyOnStartup":true}`)
@@ -97,5 +100,29 @@ func TestAutostartAPI(t *testing.T) {
 	}
 	if saveResp["notifyOnStartup"] != true {
 		t.Fatal("expected notifyOnStartup true")
+	}
+}
+
+func TestStartupNotificationWithWebAddress(t *testing.T) {
+	setupTestBase(t)
+
+	var intercepted []string
+	prev := notifySystemToast
+	notifySystemToast = func(msg string) error {
+		intercepted = append(intercepted, msg)
+		return nil
+	}
+	t.Cleanup(func() { notifySystemToast = prev })
+
+	sendStartupStatusToast("test-node", "10.0.0.1", true, nil)
+	if len(intercepted) == 0 {
+		t.Fatal("expected at least 1 notification message intercepted")
+	}
+	last := intercepted[len(intercepted)-1]
+	if !strings.Contains(last, "test-node") || !strings.Contains(last, "10.0.0.1") {
+		t.Fatalf("missing node info in toast: %q", last)
+	}
+	if !strings.Contains(last, ":8765") {
+		t.Fatalf("missing webserver port/address in toast: %q", last)
 	}
 }

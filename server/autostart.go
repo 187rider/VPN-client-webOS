@@ -100,6 +100,28 @@ func getProfileNodeInfo(id string) (string, string) {
 	return "VPN-сервер", strings.TrimSpace(string(b))
 }
 
+func appendWebAddress(msg string, en bool) string {
+	if lan := tvLANAddress(); lan != "" {
+		if en {
+			return msg + fmt.Sprintf("\nWeb UI: http://%s:8765", lan)
+		}
+		return msg + fmt.Sprintf("\nПанель: http://%s:8765", lan)
+	}
+	return msg
+}
+
+func sendStartupNotification(msg string) bool {
+	if len([]rune(msg)) > 140 {
+		r := []rune(msg)
+		msg = string(r[:139]) + "…"
+	}
+	if err := notifySystemToast(msg); err != nil {
+		log.Printf("[CVPN webOS] status notification unavailable: %v", err)
+		return false
+	}
+	return true
+}
+
 func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
 	en := tvEN()
 	nodeLabel := cleanNoticeText(nodeName, 26)
@@ -120,7 +142,8 @@ func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
 			msg = fmt.Sprintf("CVPN · Сбой подключения: %s", nodeLabel)
 		}
 	}
-	sendStatusMessage(limitToast(msg))
+	msg = appendWebAddress(msg, en)
+	sendStartupNotification(msg)
 }
 
 func runBootAutoConnect() {
@@ -133,7 +156,8 @@ func runBootAutoConnect() {
 				if en {
 					msg = "CVPN · VPN disconnected"
 				}
-				sendStatusMessage(msg)
+				msg = appendWebAddress(msg, en)
+				sendStartupNotification(msg)
 			}
 			return
 		}
@@ -150,7 +174,13 @@ func runBootAutoConnect() {
 			mx.Unlock()
 			log.Println("[CVPN webOS] Автоподключение: нет активного профиля")
 			if cfg.NotifyOnStartup {
-				sendStatusMessage("CVPN · Автозапуск: сервер не выбран")
+				en := tvEN()
+				msg := "CVPN · Автозапуск: сервер не выбран"
+				if en {
+					msg = "CVPN · Autostart: no server selected"
+				}
+				msg = appendWebAddress(msg, en)
+				sendStartupNotification(msg)
 			}
 			return
 		}
@@ -212,6 +242,10 @@ func (a *app) handleAutostartStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := readAutostartConfig()
 	p, _ := readProfiles()
 	activeName, activeIP := getProfileNodeInfo(p.Active)
+	webAddr := ""
+	if lan := tvLANAddress(); lan != "" {
+		webAddr = fmt.Sprintf("http://%s:8765", lan)
+	}
 
 	jsonResponse(w, http.StatusOK, map[string]any{
 		"ok":               true,
@@ -224,6 +258,7 @@ func (a *app) handleAutostartStatus(w http.ResponseWriter, r *http.Request) {
 		"activeProfile":    activeName,
 		"activeProfileIp":  activeIP,
 		"activeProfileId":  p.Active,
+		"webAddress":       webAddr,
 	})
 }
 

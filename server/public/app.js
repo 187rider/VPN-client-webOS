@@ -462,6 +462,8 @@
     if(d.delaySeconds)$('autostart-delay').value=String(d.delaySeconds);
     $('autostart-target-server').textContent=d.activeProfile||'Не выбран';
     $('autostart-target-ip').textContent=d.activeProfileIp||'—';
+    var webEl=$('autostart-web-address');
+    if(webEl)webEl.textContent=d.webAddress||(location.origin||'—');
     $('autostart-notify-switch').checked=d.notifyOnStartup!==false;
     $('autostart-panel-switch').checked=!!d.panelHookEnabled;
     $('autostart-last-run').textContent=d.lastAutoConnect?(formatDate(d.lastAutoConnect)+' ('+d.lastStatus+')'):(d.lastStatus||'—');

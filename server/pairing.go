@@ -154,6 +154,24 @@ func tvLANAddress() string {
 			}
 		}
 	}
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, nic := range ifaces {
+			if nic.Name == "cvpn0" || nic.Name == "lo" {
+				continue
+			}
+			addrs, err := nic.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, a := range addrs {
+				host, _, err := net.ParseCIDR(a.String())
+				if err == nil && host.To4() != nil && host.IsPrivate() {
+					return host.String()
+				}
+			}
+		}
+	}
 	return ""
 }
 func issueTVPin() (string, error) {
