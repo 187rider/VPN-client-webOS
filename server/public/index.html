@@ -112,11 +112,16 @@
                   </select>
                 </div>
                 <div class="settings-geoip-info" style="border-top:1px solid rgba(139,164,205,.14)">
-                  <div class="geoip-meta-row"><span class="muted">Сервер для автозапуска:</span><strong id="autostart-target-server">—</strong></div>
-                  <div class="geoip-meta-row"><span class="muted">Последний запуск:</span><span id="autostart-last-run">—</span></div>
+                  <div class="geoip-meta-row"><span class="muted">Узел автозапуска:</span><strong id="autostart-target-server">—</strong></div>
+                  <div class="geoip-meta-row"><span class="muted">IP-адрес узла:</span><strong id="autostart-target-ip">—</strong></div>
+                  <div class="geoip-meta-row"><span class="muted">Результат запуска:</span><span id="autostart-last-run">—</span></div>
                   <div id="autostart-status-msg" class="geoip-status-msg" hidden></div>
                 </div>
               </div>
+              <label class="settings-row settings-switch-row" for="autostart-notify-switch">
+                <span class="settings-row-label"><strong>Уведомление на экране ТВ</strong><small>Показывать статус подключения узла с IP при запуске</small></span>
+                <input id="autostart-notify-switch" type="checkbox" class="settings-switch" checked />
+              </label>
               <label class="settings-row settings-switch-row" for="autostart-panel-switch">
                 <span class="settings-row-label"><strong>Служба Homebrew init.d</strong><small>Запуск фоновой панели управления при загрузке webOS</small></span>
                 <input id="autostart-panel-switch" type="checkbox" class="settings-switch" checked />

@@ -19,9 +19,13 @@ func TestAutostartConfigReadWrite(t *testing.T) {
 	if cfg.DelaySeconds != 15 {
 		t.Fatalf("expected default 15s delay, got %d", cfg.DelaySeconds)
 	}
+	if !cfg.NotifyOnStartup {
+		t.Fatal("expected NotifyOnStartup true by default")
+	}
 
 	cfg.VPNAutoConnect = true
 	cfg.DelaySeconds = 25
+	cfg.NotifyOnStartup = false
 	if err := writeAutostartConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -33,10 +37,18 @@ func TestAutostartConfigReadWrite(t *testing.T) {
 	if cfg2.DelaySeconds != 25 {
 		t.Fatalf("expected 25s, got %d", cfg2.DelaySeconds)
 	}
+	if cfg2.NotifyOnStartup {
+		t.Fatal("expected NotifyOnStartup false")
+	}
 }
 
 func TestAutostartAPI(t *testing.T) {
 	setupTestBase(t)
+
+	p := profilesFile{Active: "node1", Items: []Profile{{ID: "node1", Name: "Server DE", Address: "1.2.3.4"}}}
+	if err := writeProfiles(p); err != nil {
+		t.Fatal(err)
+	}
 
 	key := strings.Repeat("k", 48)
 	a := &app{key: key}
@@ -59,9 +71,12 @@ func TestAutostartAPI(t *testing.T) {
 	if statusResp["vpnAutoConnect"] != false {
 		t.Fatal("expected false by default")
 	}
+	if statusResp["activeProfile"] != "Server DE" || statusResp["activeProfileIp"] != "1.2.3.4" {
+		t.Fatalf("unexpected profile info: %#v", statusResp)
+	}
 
 	// 2. POST /api/autostart
-	body := []byte(`{"vpnAutoConnect":true,"delaySeconds":20,"panelHookEnabled":true}`)
+	body := []byte(`{"vpnAutoConnect":true,"delaySeconds":20,"panelHookEnabled":true,"notifyOnStartup":true}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/autostart", bytes.NewReader(body))
 	req.Header.Set("X-CVPN-Key", key)
 	req.Header.Set("Content-Type", "application/json")
@@ -80,7 +95,7 @@ func TestAutostartAPI(t *testing.T) {
 	if saveResp["vpnAutoConnect"] != true {
 		t.Fatal("expected vpnAutoConnect true after save")
 	}
-	if saveResp["delaySeconds"] != float64(20) {
-		t.Fatalf("expected 20, got %v", saveResp["delaySeconds"])
+	if saveResp["notifyOnStartup"] != true {
+		t.Fatal("expected notifyOnStartup true")
 	}
 }

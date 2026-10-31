@@ -461,8 +461,10 @@
     $('autostart-badge').className=d.vpnAutoConnect?'settings-connected':'settings-connected muted';
     if(d.delaySeconds)$('autostart-delay').value=String(d.delaySeconds);
     $('autostart-target-server').textContent=d.activeProfile||'Не выбран';
+    $('autostart-target-ip').textContent=d.activeProfileIp||'—';
+    $('autostart-notify-switch').checked=d.notifyOnStartup!==false;
     $('autostart-panel-switch').checked=!!d.panelHookEnabled;
-    $('autostart-last-run').textContent=d.lastAutoConnect?(formatDate(d.lastAutoConnect)+' ('+d.lastStatus+')'):'—';
+    $('autostart-last-run').textContent=d.lastAutoConnect?(formatDate(d.lastAutoConnect)+' ('+d.lastStatus+')'):(d.lastStatus||'—');
   }
   function loadAutostartStatus(){
     if(!accessKey&&!csrf)return Promise.resolve();
@@ -472,8 +474,9 @@
     var vpn=$('autostart-vpn-switch').checked;
     var delay=parseInt($('autostart-delay').value,10)||15;
     var hook=$('autostart-panel-switch').checked;
+    var notify=$('autostart-notify-switch').checked;
     $('autostart-details').hidden=!vpn;
-    return api('autostart','POST',{vpnAutoConnect:vpn,delaySeconds:delay,panelHookEnabled:hook}).then(function(res){
+    return api('autostart','POST',{vpnAutoConnect:vpn,delaySeconds:delay,panelHookEnabled:hook,notifyOnStartup:notify}).then(function(res){
       renderAutostartStatus(res);
       var msg=$('autostart-status-msg');
       if(msg){msg.hidden=false;msg.className='geoip-status-msg success';msg.textContent='Настройки автозапуска сохранены';setTimeout(function(){msg.hidden=true;},4000);}
@@ -483,6 +486,7 @@
   }
   $('autostart-vpn-switch').onchange=saveAutostartSettings;
   $('autostart-delay').onchange=saveAutostartSettings;
+  $('autostart-notify-switch').onchange=saveAutostartSettings;
   $('autostart-panel-switch').onchange=saveAutostartSettings;
 
   var geoIPData=null;

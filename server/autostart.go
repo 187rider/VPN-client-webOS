@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,6 +16,7 @@ type autostartConfig struct {
 	VPNAutoConnect   bool   `json:"vpnAutoConnect"`
 	DelaySeconds     int    `json:"delaySeconds"`
 	PanelHookEnabled bool   `json:"panelHookEnabled"`
+	NotifyOnStartup  bool   `json:"notifyOnStartup"`
 	LastAutoConnect  string `json:"lastAutoConnect,omitempty"`
 	LastStatus       string `json:"lastStatus,omitempty"`
 }
@@ -42,6 +45,7 @@ func readAutostartConfig() autostartConfig {
 		VPNAutoConnect:   false,
 		DelaySeconds:     15,
 		PanelHookEnabled: isHookInstalled(),
+		NotifyOnStartup:  true,
 		LastStatus:       "не выполнялся",
 	}
 	data, err := os.ReadFile(autostartSettingsFile())
@@ -78,10 +82,59 @@ func syncPanelHook(enabled bool) {
 	}
 }
 
+func getProfileNodeInfo(id string) (string, string) {
+	p, err := readProfiles()
+	if err == nil {
+		for _, item := range p.Items {
+			if item.ID == id {
+				ip := item.Address
+				if ip == "" {
+					b, _ := os.ReadFile(path("config", "server-ip.txt"))
+					ip = strings.TrimSpace(string(b))
+				}
+				return item.Name, ip
+			}
+		}
+	}
+	b, _ := os.ReadFile(path("config", "server-ip.txt"))
+	return "VPN-сервер", strings.TrimSpace(string(b))
+}
+
+func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
+	en := tvEN()
+	nodeLabel := cleanNoticeText(nodeName, 26)
+	if nodeIP != "" {
+		nodeLabel += " (" + nodeIP + ")"
+	}
+	var msg string
+	if success {
+		if en {
+			msg = fmt.Sprintf("CVPN · Connected: %s", nodeLabel)
+		} else {
+			msg = fmt.Sprintf("CVPN · Подключено: %s", nodeLabel)
+		}
+	} else {
+		if en {
+			msg = fmt.Sprintf("CVPN · Connection failed: %s", nodeLabel)
+		} else {
+			msg = fmt.Sprintf("CVPN · Сбой подключения: %s", nodeLabel)
+		}
+	}
+	sendStatusMessage(limitToast(msg))
+}
+
 func runBootAutoConnect() {
 	go func() {
 		cfg := readAutostartConfig()
 		if !cfg.VPNAutoConnect {
+			if cfg.NotifyOnStartup {
+				en := tvEN()
+				msg := "CVPN · VPN отключён"
+				if en {
+					msg = "CVPN · VPN disconnected"
+				}
+				sendStatusMessage(msg)
+			}
 			return
 		}
 
@@ -91,22 +144,29 @@ func runBootAutoConnect() {
 		}
 		time.Sleep(delay)
 
-		if active() {
-			log.Println("[CVPN webOS] Автоподключение: VPN уже активен, пропуск")
-			return
-		}
-
 		mx.Lock()
 		p, err := readProfiles()
 		if err != nil || p.Active == "" {
 			mx.Unlock()
 			log.Println("[CVPN webOS] Автоподключение: нет активного профиля")
+			if cfg.NotifyOnStartup {
+				sendStatusMessage("CVPN · Автозапуск: сервер не выбран")
+			}
 			return
 		}
 		targetID := p.Active
+		nodeName, nodeIP := getProfileNodeInfo(targetID)
 		mx.Unlock()
 
-		log.Printf("[CVPN webOS] Автоподключение VPN к профилю %s...\n", targetID)
+		if active() {
+			log.Println("[CVPN webOS] Автоподключение: VPN уже активен")
+			if cfg.NotifyOnStartup {
+				sendStartupStatusToast(nodeName, nodeIP, true, nil)
+			}
+			return
+		}
+
+		log.Printf("[CVPN webOS] Автоподключение VPN к узлу %s (%s)...\n", nodeName, nodeIP)
 
 		mx.Lock()
 		defer mx.Unlock()
@@ -120,11 +180,14 @@ func runBootAutoConnect() {
 		cfg.LastAutoConnect = nowStr
 
 		if err != nil || !active() {
-			cfg.LastStatus = "ошибка: " + safeError(err)
+			cfg.LastStatus = fmt.Sprintf("Ошибка: %s (%s)", nodeName, nodeIP)
 			_ = writeAutostartConfig(cfg)
 			log.Printf("[CVPN webOS] Сбой автоподключения: %v (%s)\n", err, output)
 			if active() {
 				_, _ = runEngine("stop")
+			}
+			if cfg.NotifyOnStartup {
+				sendStartupStatusToast(nodeName, nodeIP, false, err)
 			}
 			return
 		}
@@ -134,32 +197,32 @@ func runBootAutoConnect() {
 			log.Printf("[CVPN webOS] Предупреждение: confirm после автоподключения вернул %v\n", confirmErr)
 		}
 
-		cfg.LastStatus = "успешно подключено"
+		cfg.LastStatus = fmt.Sprintf("Подключено: %s (%s)", nodeName, nodeIP)
 		_ = writeAutostartConfig(cfg)
-		recordEvent("autostart", "VPN подключён автоматически при старте ТВ")
-		log.Println("[CVPN webOS] VPN успешно подключён автоматически")
+		recordEvent("autostart", fmt.Sprintf("VPN подключён автоматически к узлу %s (%s)", nodeName, nodeIP))
+		log.Printf("[CVPN webOS] VPN успешно подключён автоматически к %s (%s)\n", nodeName, nodeIP)
+
+		if cfg.NotifyOnStartup {
+			sendStartupStatusToast(nodeName, nodeIP, true, nil)
+		}
 	}()
 }
 
 func (a *app) handleAutostartStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := readAutostartConfig()
 	p, _ := readProfiles()
-	activeName := "не выбран"
-	for _, item := range p.Items {
-		if item.ID == p.Active {
-			activeName = item.Name
-			break
-		}
-	}
+	activeName, activeIP := getProfileNodeInfo(p.Active)
 
 	jsonResponse(w, http.StatusOK, map[string]any{
 		"ok":               true,
 		"vpnAutoConnect":   cfg.VPNAutoConnect,
 		"delaySeconds":     cfg.DelaySeconds,
 		"panelHookEnabled": cfg.PanelHookEnabled,
+		"notifyOnStartup":  cfg.NotifyOnStartup,
 		"lastAutoConnect":  cfg.LastAutoConnect,
 		"lastStatus":       cfg.LastStatus,
 		"activeProfile":    activeName,
+		"activeProfileIp":  activeIP,
 		"activeProfileId":  p.Active,
 	})
 }
@@ -169,6 +232,7 @@ func (a *app) handleAutostartSave(w http.ResponseWriter, r *http.Request) {
 		VPNAutoConnect   bool `json:"vpnAutoConnect"`
 		DelaySeconds     int  `json:"delaySeconds"`
 		PanelHookEnabled bool `json:"panelHookEnabled"`
+		NotifyOnStartup  bool `json:"notifyOnStartup"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		errorOut(w, http.StatusBadRequest, "Некорректный запрос")
@@ -186,6 +250,7 @@ func (a *app) handleAutostartSave(w http.ResponseWriter, r *http.Request) {
 	cfg.VPNAutoConnect = req.VPNAutoConnect
 	cfg.DelaySeconds = req.DelaySeconds
 	cfg.PanelHookEnabled = req.PanelHookEnabled
+	cfg.NotifyOnStartup = req.NotifyOnStartup
 
 	syncPanelHook(req.PanelHookEnabled)
 	cfg.PanelHookEnabled = isHookInstalled()
