@@ -394,7 +394,14 @@ func sendLunaToast(ctx context.Context, binary string, data []byte) error {
 	output, err := exec.CommandContext(ctx, binary, "-n", "1", "-f", "-a",
 		"com.webos.service.secondscreen.gateway", "luna://com.webos.notification/createToast", string(data)).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("luna-send Toast: %w", err)
+		output2, err2 := exec.CommandContext(ctx, binary, "-n", "1", "-f",
+			"luna://com.webos.notification/createToast", string(data)).CombinedOutput()
+		if err2 == nil {
+			output = output2
+			err = nil
+		} else {
+			return fmt.Errorf("luna-send Toast: %w (fallback: %v, out: %s)", err, err2, string(output2))
+		}
 	}
 	var response struct {
 		ReturnValue bool   `json:"returnValue"`

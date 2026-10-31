@@ -1214,6 +1214,7 @@ func main() {
 	}
 	startGeoIPAutoUpdater()
 	runBootAutoConnect()
+	startPowerStateMonitor(context.Background())
 	keyBytes, err := os.ReadFile(path("webui", "access.key"))
 	fail(err)
 	key := strings.TrimSpace(string(keyBytes))

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -151,16 +153,61 @@ func sendStartupStatusToast(nodeName, nodeIP string, success bool, err error) {
 	sendStartupNotification(msg)
 }
 
-func runBootAutoConnect() {
+var (
+	lastStartupToastTime time.Time
+	lastStartupToastLock sync.Mutex
+	queryTVPower         = queryTVPowerState
+)
+
+func canSendStartupToast() bool {
+	lastStartupToastLock.Lock()
+	defer lastStartupToastLock.Unlock()
+	if !lastStartupToastTime.IsZero() && time.Since(lastStartupToastTime) < 10*time.Second {
+		return false
+	}
+	lastStartupToastTime = time.Now()
+	return true
+}
+
+func queryTVPowerState() string {
+	binary, err := lunaSendExecutable()
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, binary, "-n", "1", "-f",
+		"luna://com.webos.service.tvpower/power/getPowerState", "{}").CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	var res struct {
+		ReturnValue bool   `json:"returnValue"`
+		State       string `json:"state"`
+	}
+	if err := json.Unmarshal(out, &res); err == nil && res.ReturnValue {
+		return strings.TrimSpace(res.State)
+	}
+	return ""
+}
+
+func runBootAutoConnectWithReason(reason string) {
 	go func() {
 		cfg := readAutostartConfig()
 
 		delay := time.Duration(cfg.DelaySeconds) * time.Second
-		if delay < 5*time.Second {
-			delay = 30 * time.Second
+		if reason == "wake_from_standby" {
+			delay = 5 * time.Second
+		} else if delay < 5*time.Second {
+			delay = 15 * time.Second
 		}
-		log.Printf("[CVPN webOS] Ожидание %v перед автозапуском для стабилизации системы и сети...\n", delay)
+		log.Printf("[CVPN webOS] (%s) Ожидание %v для стабилизации сети и интерфейса...\n", reason, delay)
 		time.Sleep(delay)
+
+		if !canSendStartupToast() {
+			log.Printf("[CVPN webOS] (%s) Пропуск уведомления: недавно уже отображалось\n", reason)
+			return
+		}
 
 		if !cfg.VPNAutoConnect {
 			if cfg.NotifyOnStartup {
@@ -179,7 +226,7 @@ func runBootAutoConnect() {
 		p, err := readProfiles()
 		if err != nil || p.Active == "" {
 			mx.Unlock()
-			log.Println("[CVPN webOS] Автоподключение: нет активного профиля")
+			log.Printf("[CVPN webOS] (%s) Автоподключение: нет активного профиля\n", reason)
 			if cfg.NotifyOnStartup {
 				en := tvEN()
 				msg := "CVPN · Автозапуск: сервер не выбран"
@@ -196,18 +243,21 @@ func runBootAutoConnect() {
 		mx.Unlock()
 
 		if active() {
-			log.Println("[CVPN webOS] Автоподключение: VPN уже активен")
+			log.Printf("[CVPN webOS] (%s) VPN уже активен, отправка статуса узла %s (%s)...\n", reason, nodeName, nodeIP)
 			if cfg.NotifyOnStartup {
 				sendStartupStatusToast(nodeName, nodeIP, true, nil)
 			}
 			return
 		}
 
-		log.Printf("[CVPN webOS] Автоподключение VPN к узлу %s (%s)...\n", nodeName, nodeIP)
+		log.Printf("[CVPN webOS] (%s) Автоподключение VPN к узлу %s (%s)...\n", reason, nodeName, nodeIP)
 
 		mx.Lock()
 		defer mx.Unlock()
 		if active() {
+			if cfg.NotifyOnStartup {
+				sendStartupStatusToast(nodeName, nodeIP, true, nil)
+			}
 			return
 		}
 
@@ -219,7 +269,7 @@ func runBootAutoConnect() {
 		if err != nil || !active() {
 			cfg.LastStatus = fmt.Sprintf("Ошибка: %s (%s)", nodeName, nodeIP)
 			_ = writeAutostartConfig(cfg)
-			log.Printf("[CVPN webOS] Сбой автоподключения: %v (%s)\n", err, output)
+			log.Printf("[CVPN webOS] (%s) Сбой автоподключения: %v (%s)\n", reason, err, output)
 			if active() {
 				_, _ = runEngine("stop")
 			}
@@ -236,11 +286,50 @@ func runBootAutoConnect() {
 
 		cfg.LastStatus = fmt.Sprintf("Подключено: %s (%s)", nodeName, nodeIP)
 		_ = writeAutostartConfig(cfg)
-		recordEvent("autostart", fmt.Sprintf("VPN подключён автоматически к узлу %s (%s)", nodeName, nodeIP))
-		log.Printf("[CVPN webOS] VPN успешно подключён автоматически к %s (%s)\n", nodeName, nodeIP)
+		recordEvent("autostart", fmt.Sprintf("VPN подключён автоматически (%s) к узлу %s (%s)", reason, nodeName, nodeIP))
+		log.Printf("[CVPN webOS] VPN успешно подключён (%s) к %s (%s)\n", reason, nodeName, nodeIP)
 
 		if cfg.NotifyOnStartup {
 			sendStartupStatusToast(nodeName, nodeIP, true, nil)
+		}
+	}()
+}
+
+func runBootAutoConnect() {
+	runBootAutoConnectWithReason("boot")
+}
+
+func startPowerStateMonitor(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+
+		wasStandby := false
+		initState := queryTVPower()
+		if initState != "" && initState != "Active" {
+			wasStandby = true
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				st := queryTVPower()
+				if st == "" {
+					continue
+				}
+				if st != "Active" {
+					if !wasStandby {
+						log.Printf("[CVPN webOS] ТВ перешёл в режим сна/ожидания (powerState: %s)\n", st)
+					}
+					wasStandby = true
+				} else if wasStandby {
+					log.Printf("[CVPN webOS] ТВ включился из режима сна! (powerState: %s)\n", st)
+					wasStandby = false
+					runBootAutoConnectWithReason("wake_from_standby")
+				}
+			}
 		}
 	}()
 }

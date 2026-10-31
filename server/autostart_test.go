@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAutostartConfigReadWrite(t *testing.T) {
@@ -124,5 +125,26 @@ func TestStartupNotificationWithWebAddress(t *testing.T) {
 	}
 	if !strings.Contains(last, ":8765") {
 		t.Fatalf("missing webserver port/address in toast: %q", last)
+	}
+}
+
+func TestCanSendStartupToastCooldown(t *testing.T) {
+	lastStartupToastLock.Lock()
+	lastStartupToastTime = time.Time{}
+	lastStartupToastLock.Unlock()
+
+	if !canSendStartupToast() {
+		t.Fatal("expected first call to succeed")
+	}
+	if canSendStartupToast() {
+		t.Fatal("expected immediate second call to be blocked by cooldown")
+	}
+
+	lastStartupToastLock.Lock()
+	lastStartupToastTime = time.Now().Add(-15 * time.Second)
+	lastStartupToastLock.Unlock()
+
+	if !canSendStartupToast() {
+		t.Fatal("expected call after cooldown to succeed")
 	}
 }
