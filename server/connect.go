@@ -118,6 +118,7 @@ func (a *app) connectProfile(w http.ResponseWriter, r *http.Request) {
 		errorOut(w, 409, "Не удалось подключиться. Сеть восстановлена, прежний профиль сохранён. Проверьте диагностику.")
 		return
 	}
+	_, _ = runEngine("confirm")
 	if switching {
 		recordEvent("switch_completed", "VPN переключён на выбранный профиль")
 	} else {

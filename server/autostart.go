@@ -54,8 +54,8 @@ func readAutostartConfig() autostartConfig {
 	if err == nil {
 		_ = json.Unmarshal(data, &cfg)
 	}
-	if cfg.DelaySeconds < 5 || cfg.DelaySeconds > 120 {
-		cfg.DelaySeconds = 30
+	if cfg.DelaySeconds < 3 || cfg.DelaySeconds > 120 {
+		cfg.DelaySeconds = 10
 	}
 	cfg.PanelHookEnabled = isHookInstalled()
 	return cfg
@@ -200,18 +200,41 @@ func queryTVPowerState() string {
 	return ""
 }
 
+func waitForNetworkReady(maxWait time.Duration) bool {
+	deadline := time.Now().Add(maxWait)
+	for time.Now().Before(deadline) {
+		routes, err := os.ReadFile("/proc/net/route")
+		if err == nil {
+			for _, line := range strings.Split(string(routes), "\n") {
+				f := strings.Fields(line)
+				if len(f) >= 8 && f[1] == "00000000" && f[7] == "00000000" && f[0] != "cvpn0" {
+					return true
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return false
+}
+
 func runBootAutoConnectWithReason(reason string) {
 	go func() {
 		cfg := readAutostartConfig()
 
-		delay := time.Duration(cfg.DelaySeconds) * time.Second
-		if reason == "wake_from_standby" {
-			delay = 5 * time.Second
-		} else if delay < 5*time.Second {
-			delay = 15 * time.Second
+		maxWait := time.Duration(cfg.DelaySeconds) * time.Second
+		if maxWait < 3*time.Second {
+			maxWait = 3 * time.Second
 		}
-		log.Printf("[CVPN webOS] (%s) Ожидание %v для стабилизации сети и интерфейса...\n", reason, delay)
-		time.Sleep(delay)
+		if reason == "wake_from_standby" {
+			maxWait = 8 * time.Second
+		}
+		log.Printf("[CVPN webOS] (%s) Ожидание готовности домашней сети (до %v)...\n", reason, maxWait)
+		if waitForNetworkReady(maxWait) {
+			log.Printf("[CVPN webOS] (%s) Сеть обнаружена, пауза 1s для стабилизации...\n", reason)
+			time.Sleep(1 * time.Second)
+		} else {
+			log.Printf("[CVPN webOS] (%s) Сеть не появилась за %v, пробуем продолжить...\n", reason, maxWait)
+		}
 
 		st := status()
 		if st["needsRecovery"] == true || (st["connected"] != true && active()) {

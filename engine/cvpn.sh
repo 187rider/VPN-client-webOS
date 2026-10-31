@@ -195,7 +195,7 @@ probe() {
     attempt=1
     general_ok=0
     while [ "$attempt" -le 3 ]; do
-        if curl -4 -fsS --noproxy '*' --connect-timeout 8 --max-time 15 \
+        if curl -4 -fsS --noproxy '*' --connect-timeout 6 --max-time 10 \
             -o /dev/null 'https://example.com/' \
             > "$STATE/startup-fallback.out" 2> "$STATE/startup-fallback.err"; then
             general_ok=1
@@ -221,14 +221,14 @@ probe() {
     say 'PROBE_2_YOUTUBE_HTTPS'
     attempt=1
     youtube_ok=0
-    while [ "$attempt" -le 3 ]; do
-        if curl -4 -fsS -I --noproxy '*' --connect-timeout 8 --max-time 12 \
+    while [ "$attempt" -le 2 ]; do
+        if curl -4 -fsS -I --noproxy '*' --connect-timeout 4 --max-time 6 \
             "$TEST_URL" > "$STATE/youtube.out" 2> "$STATE/youtube.err"; then
             youtube_ok=1
             break
         fi
         attempt=$((attempt + 1))
-        [ "$attempt" -le 3 ] && sleep 1
+        [ "$attempt" -le 2 ] && sleep 1
     done
     if [ "$youtube_ok" -eq 1 ]; then
         say 'YOUTUBE_HTTPS=OK'
@@ -312,17 +312,16 @@ start_now() {
     wp=$!
     nohup sh "$SELF" timer "$token" > "$STATE/timer.log" 2>&1 < /dev/null &
     tp=$!
-    sleep 1
+    usleep 100000 2>/dev/null || sleep 0.1 2>/dev/null || sleep 1
     if ! kill -0 "$wp" 2>/dev/null || ! kill -0 "$tp" 2>/dev/null; then
         rollback_unlocked "$token"; unlock; fail 'Safety processes failed to start'
     fi
 
     nohup "$XRAY" run -c "$RUN_CONFIG" > "$STATE/xray.log" 2>&1 < /dev/null &
     echo "$!" > "$STATE/xray.pid"
-    # Slow webOS TVs may need longer than three seconds for the TUN device.
-    # Check every second, bounded to 10s; never change routing before ready.
+    # Fast sub-second poll for the TUN device; bounded to 10s.
     wait_tun=0
-    while [ "$wait_tun" -lt 10 ]; do
+    while [ "$wait_tun" -lt 50 ]; do
         if owned_xray && ip link show dev "$IFACE" >/dev/null 2>&1; then
             break
         fi
@@ -330,7 +329,7 @@ start_now() {
             rollback_unlocked "$token"; unlock; fail 'Xray exited before TUN became ready'
         fi
         wait_tun=$((wait_tun + 1))
-        sleep 1
+        usleep 100000 2>/dev/null || sleep 0.2 2>/dev/null || sleep 1
     done
     if ! owned_xray || ! ip link show dev "$IFACE" >/dev/null 2>&1; then
         rollback_unlocked "$token"; unlock; fail 'Xray/TUN not ready within 10 seconds'
