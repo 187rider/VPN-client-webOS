@@ -152,6 +152,9 @@ func metaFromOutbound(o map[string]any) (string, string, string, error) {
 	if tr == "" {
 		tr = "tcp"
 	}
+	if strings.ToLower(tr) == "websocket" {
+		tr = "ws"
+	}
 	sec, _ := stream["security"].(string)
 	if sec == "" {
 		sec = "none"
@@ -561,15 +564,18 @@ func makeVLESS(s string) (map[string]any, string, string, error) {
 	if network == "" {
 		network = "tcp"
 	}
+	if network == "websocket" {
+		network = "ws"
+	}
 	if network == "gun" { // V2Ray's historical name for the gRPC transport.
 		network = "grpc"
 	}
-	if network != "tcp" && network != "xhttp" && network != "grpc" {
-		return nil, "", "", errors.New("supported transports: TCP, XHTTP, gRPC")
+	if network != "tcp" && network != "xhttp" && network != "grpc" && network != "ws" {
+		return nil, "", "", errors.New("supported transports: TCP, XHTTP, gRPC, WebSocket")
 	}
 	sec := strings.ToLower(q.Get("security"))
-	if sec != "reality" && !(network == "grpc" && sec == "tls") {
-		return nil, "", "", errors.New("supported security: Reality, gRPC also supports TLS")
+	if sec != "reality" && !(network == "grpc" && sec == "tls") && !(network == "ws" && sec == "tls") {
+		return nil, "", "", errors.New("supported security: Reality; gRPC and WebSocket also support TLS")
 	}
 	pbk := q.Get("pbk")
 	sni := strings.TrimSpace(q.Get("sni"))
@@ -586,7 +592,7 @@ func makeVLESS(s string) (map[string]any, string, string, error) {
 	user := map[string]any{"id": uid, "encryption": "none"}
 	if flow := q.Get("flow"); flow != "" {
 		if network != "tcp" {
-			return nil, "", "", errors.New("flow must be empty for gRPC and XHTTP")
+			return nil, "", "", errors.New("flow must be empty for gRPC, XHTTP and WebSocket")
 		}
 		user["flow"] = flow
 	}
@@ -594,11 +600,26 @@ func makeVLESS(s string) (map[string]any, string, string, error) {
 	if sec == "reality" {
 		stream["realitySettings"] = map[string]any{"serverName": sni, "fingerprint": fp, "password": pbk, "shortId": q.Get("sid"), "spiderX": q.Get("spx")}
 	} else {
-		// gRPC uses HTTP/2. Never allow an imported link to disable TLS verification.
+		// gRPC and WebSocket use TLS. Never allow an imported link to disable TLS verification.
 		if isTruthy(q.Get("allowInsecure")) || isTruthy(q.Get("insecure")) {
 			return nil, "", "", errors.New("insecure TLS certificates are not allowed")
 		}
-		tlsSettings := map[string]any{"serverName": sni, "alpn": []string{"h2"}, "fingerprint": fp}
+		tlsSettings := map[string]any{"serverName": sni, "fingerprint": fp}
+		if network == "grpc" {
+			tlsSettings["alpn"] = []string{"h2"}
+		} else if alpn := strings.TrimSpace(q.Get("alpn")); alpn != "" {
+			parts := strings.Split(alpn, ",")
+			cleanParts := make([]string, 0, len(parts))
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					cleanParts = append(cleanParts, p)
+				}
+			}
+			if len(cleanParts) > 0 {
+				tlsSettings["alpn"] = cleanParts
+			}
+		}
 		stream["tlsSettings"] = tlsSettings
 	}
 	if network == "grpc" {
@@ -607,6 +628,13 @@ func makeVLESS(s string) (map[string]any, string, string, error) {
 			return nil, "", "", err
 		}
 		stream["grpcSettings"] = settings
+	}
+	if network == "ws" {
+		settings, err := wsFromLink(q, host)
+		if err != nil {
+			return nil, "", "", err
+		}
+		stream["wsSettings"] = settings
 	}
 	if network == "xhttp" {
 		xh := map[string]any{"path": "/", "mode": "auto"}
@@ -663,11 +691,11 @@ func makeJSON(s string) (map[string]any, string, string, error) {
 	if e != nil {
 		return nil, "", "", e
 	}
-	if tr != "TCP" && tr != "XHTTP" && tr != "GRPC" {
-		return nil, "", "", errors.New("only TCP, XHTTP and gRPC supported")
+	if tr != "TCP" && tr != "XHTTP" && tr != "GRPC" && tr != "WS" {
+		return nil, "", "", errors.New("only TCP, XHTTP, gRPC and WebSocket supported")
 	}
-	if sec != "REALITY" && !(tr == "GRPC" && sec == "TLS") {
-		return nil, "", "", errors.New("supported security: Reality; gRPC also supports TLS")
+	if sec != "REALITY" && !(tr == "GRPC" && sec == "TLS") && !(tr == "WS" && sec == "TLS") {
+		return nil, "", "", errors.New("supported security: Reality; gRPC and WebSocket also support TLS")
 	}
 	ip, e := resolveIPv4(addr)
 	if e != nil {
@@ -696,14 +724,29 @@ func makeJSON(s string) (map[string]any, string, string, error) {
 			return nil, "", "", err
 		}
 	}
+	if tr == "WS" {
+		if users, ok := srv["users"].([]any); ok && len(users) > 0 {
+			if u, ok := users[0].(map[string]any); ok {
+				if flow, _ := u["flow"].(string); flow != "" {
+					return nil, "", "", errors.New("flow must be empty for WebSocket")
+				}
+			}
+		}
+	}
 	clean := map[string]any{"tag": "cvpn-proxy", "protocol": "vless", "settings": map[string]any{"vnext": []any{srv}}, "streamSettings": map[string]any{"network": strings.ToLower(tr), "security": strings.ToLower(sec)}}
 	cleanStream := clean["streamSettings"].(map[string]any)
 	if sec == "REALITY" {
 		if v, ok := stream["realitySettings"].(map[string]any); ok {
 			cleanStream["realitySettings"] = v
 		}
-	} else {
+	} else if tr == "GRPC" {
 		tlsConfig, err := safeGrpcTLS(stream["tlsSettings"])
+		if err != nil {
+			return nil, "", "", err
+		}
+		cleanStream["tlsSettings"] = tlsConfig
+	} else if tr == "WS" {
+		tlsConfig, err := safeWSTLS(stream["tlsSettings"])
 		if err != nil {
 			return nil, "", "", err
 		}
@@ -719,6 +762,12 @@ func makeJSON(s string) (map[string]any, string, string, error) {
 		if v, ok := stream["xhttpSettings"]; ok {
 			cleanStream["xhttpSettings"] = v
 		}
+	} else if tr == "WS" {
+		ws, err := safeWSJSON(stream["wsSettings"])
+		if err != nil {
+			return nil, "", "", err
+		}
+		cleanStream["wsSettings"] = ws
 	} else if tr == "TCP" {
 		if v, ok := stream["tcpSettings"]; ok {
 			cleanStream["tcpSettings"] = v
@@ -801,15 +850,24 @@ func fetchSubscriptionInfo(raw string) ([]string, string, string, *SubscriptionM
 		if err != nil {
 			return nil, err
 		}
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
 		if err != nil {
 			return nil, err
 		}
+		var lastErr error
 		for _, ip := range ips {
-			if !publicDestination(ip.IP) {
+			v4 := ip.To4()
+			if v4 == nil || !publicDestination(v4) {
 				continue
 			}
-			return (&net.Dialer{Timeout: 6 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(ip.IP.String(), port))
+			conn, err := (&net.Dialer{Timeout: 6 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(v4.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+		if lastErr != nil {
+			return nil, lastErr
 		}
 		return nil, errors.New("subscription resolves to a blocked local address")
 	}
@@ -1014,7 +1072,7 @@ func (a *app) importProfile(w http.ResponseWriter, r *http.Request) {
 		imported++
 	}
 	if imported == 0 && skipped == 0 {
-		errorOut(w, 400, "Нет подходящих VLESS TCP/XHTTP/gRPC конфигураций")
+		errorOut(w, 400, "Нет подходящих VLESS TCP/XHTTP/gRPC/WebSocket конфигураций")
 		return
 	}
 	count := 0

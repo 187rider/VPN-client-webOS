@@ -2,7 +2,7 @@
   <img src="assets/icon160.png" width="112" height="112" alt="CVPN webOS app icon">
   <h1>CVPN webOS</h1>
   <p><strong>Xray / VLESS VPN for rooted LG webOS TVs</strong></p>
-  <p><strong>Import Xray configs. Connect with TCP, XHTTP or gRPC.</strong><br>
+  <p><strong>Import Xray configs. Connect with TCP, XHTTP, gRPC or WebSocket.</strong><br>
   VLESS links, HTTPS subscriptions and supported Xray JSON — managed from your phone.</p>
   <p><strong>Free to use · No CVPN account required · English & Russian</strong></p>
   <p>
@@ -20,10 +20,10 @@
 
 ## Overview
 
-**CVPN webOS** is an **Xray/VLESS VPN client for rooted LG webOS TVs**. Import your compatible Xray configuration, choose **TCP, XHTTP or gRPC**, and control the connection from your phone over your trusted home network. The VPN engine runs on the TV itself. **TCP, XHTTP and gRPC are Xray transports, not three separate VPN protocols.**
+**CVPN webOS** is an **Xray/VLESS VPN client for rooted LG webOS TVs**. Import your compatible Xray configuration, choose **TCP, XHTTP, gRPC or WebSocket**, and control the connection from your phone over your trusted home network. The VPN engine runs on the TV itself. **TCP, XHTTP, gRPC and WebSocket are Xray transports, not separate VPN protocols.**
 
 - **All-in-One:** TV launcher, ARMv7 backend, Xray-core and recovery scripts in a single IPK. Nothing else needs downloading during TV setup.
-- **Xray transport support:** **TCP · XHTTP · gRPC** for compatible VLESS configurations. Reality is supported; gRPC also supports TLS. Transport and security settings must match your server.
+- **Xray transport support:** **TCP · XHTTP · gRPC · WebSocket** for compatible VLESS configurations. Reality is supported; gRPC and WebSocket also support TLS. Transport and security settings must match your server.
 - **Your Xray configs:** import `vless://` links, compatible HTTPS subscriptions or supported Xray JSON configurations. Bring your own provider — a CVPN subscription is optional.
 - **TV pairing:** open the app on LG, scan the QR and enter a short-lived PIN if prompted.
 - **Simple control:** English/Russian interface, server selection, subscription import, device access and diagnostics from your browser.

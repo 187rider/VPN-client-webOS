@@ -43,9 +43,13 @@ func importFailureReason(err error) string {
 	s := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(s, "supported transports"), strings.Contains(s, "only tcp"), strings.Contains(s, "transport"):
-		return "Неподдерживаемый транспорт (доступны TCP, XHTTP и gRPC)"
-	case strings.Contains(s, "grpc") || strings.Contains(s, "serviceName") || strings.Contains(s, "multimode") || strings.Contains(s, "alpn"):
+		return "Неподдерживаемый транспорт (доступны TCP, XHTTP, gRPC и WebSocket)"
+	case strings.Contains(s, "supported security"):
+		return "Неподдерживаемый протокол безопасности (Reality или TLS)"
+	case strings.Contains(s, "grpc") || strings.Contains(s, "servicename") || strings.Contains(s, "multimode") || strings.Contains(s, "alpn"):
 		return "Неверные параметры gRPC (serviceName, режим или TLS)"
+	case strings.Contains(s, "websocket") || strings.Contains(s, "wssettings"):
+		return "Неверные параметры WebSocket (путь, host или TLS)"
 	case strings.Contains(s, "reality") || strings.Contains(s, "pbk") || strings.Contains(s, "sni"):
 		return "Параметры Reality отсутствуют или не поддерживаются"
 	case strings.Contains(s, "xhttp") || strings.Contains(s, "extra"):
