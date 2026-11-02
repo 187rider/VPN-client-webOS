@@ -265,15 +265,31 @@ func (a *app) groupAction(w http.ResponseWriter, r *http.Request) {
 				keep = append(keep, item)
 			}
 		}
-		if len(removed) == 0 {
-			errorOut(w, 409, "Пустая группа")
-			return
-		}
-		// Avoid orphaned selection: restore known original profile first.
+		// Avoid orphaned active selection: switch to another profile or clear active
 		if containsActive(removed, p.Active) {
-			if e := selectProfileLocked(&p, "installed"); e != nil {
-				errorOut(w, 409, "Нельзя безопасно удалить выбранную группу: "+safeError(e))
-				return
+			switched := false
+			for _, candidate := range keep {
+				if candidate.ID == "installed" {
+					if e := selectProfileLocked(&p, "installed"); e == nil {
+						switched = true
+						break
+					}
+				}
+			}
+			if !switched && len(keep) > 0 {
+				for _, candidate := range keep {
+					if e := selectProfileLocked(&p, candidate.ID); e == nil {
+						switched = true
+						break
+					}
+				}
+			}
+			if !switched {
+				p.Active = ""
+				_ = os.Remove(path("config", "server-ip.txt"))
+				if len(embeddedClientTemplate) > 0 {
+					_ = atomic(path("config", "client.json"), embeddedClientTemplate, 0600)
+				}
 			}
 		}
 		p.Items = keep
@@ -281,6 +297,9 @@ func (a *app) groupAction(w http.ResponseWriter, r *http.Request) {
 		for _, item := range p.Groups {
 			if item.ID != req.ID {
 				next = append(next, item)
+			} else if item.ID == "manual" {
+				// Keep manual group container with 0 items
+				next = append(next, Group{ID: "manual", Name: item.Name, Kind: "manual"})
 			}
 		}
 		p.Groups = next

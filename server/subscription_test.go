@@ -110,3 +110,70 @@ func TestLegacyMigrationKeepsOriginal(t *testing.T) {
 		t.Fatal("missing backup")
 	}
 }
+
+func TestDeleteGroupWithoutInstalledProfile(t *testing.T) {
+	prev := base
+	base = prepareFixture(t)
+	defer func() { base = prev }()
+	if e := bootstrap(); e != nil {
+		t.Fatal(e)
+	}
+
+	// Simulate setup where "installed" profile does NOT exist (e.g. only imported groups)
+	u1 := "vless://22222222-2222-2222-2222-222222222222@1.1.1.1:443?security=reality&type=xhttp&sni=www.google.com&pbk=test&mode=packet-up#Sub1%20Node"
+	content := []string{u1}
+	prevFetcher := subscriptionFetcher
+	defer func() { subscriptionFetcher = prevFetcher }()
+	subscriptionFetcher = func(_ string) ([]string, string, string, *SubscriptionMeta, error) { return content, "", "example.com", nil, nil }
+
+	a := &app{key: strings.Repeat("x", 40)}
+	source := "https://example.com/sub/token123"
+	resp := callAPI(a, "/api/import", map[string]any{"content": source})
+	if resp.Code != 200 {
+		t.Fatalf("import error %d %s", resp.Code, resp.Body.String())
+	}
+
+	// Remove "installed" profile completely to simulate clean setup
+	p, _ := readProfiles()
+	var withoutInstalled []Profile
+	for _, it := range p.Items {
+		if it.ID != "installed" {
+			withoutInstalled = append(withoutInstalled, it)
+		}
+	}
+	p.Items = withoutInstalled
+	gid := subscriptionID(source)
+	p.Active = p.Items[0].ID
+	if e := writeProfiles(p); e != nil {
+		t.Fatal(e)
+	}
+
+	// Delete group containing active profile when "installed" profile doesn't exist
+	resp = callAPI(a, "/api/groups/delete", map[string]any{"id": gid})
+	if resp.Code != 200 {
+		t.Fatalf("delete failed without installed profile: %d %s", resp.Code, resp.Body.String())
+	}
+
+	p, _ = readProfiles()
+	if len(p.Items) != 0 || p.Active != "" {
+		t.Fatalf("expected 0 items and empty active, got %+v", p)
+	}
+
+	// Add an empty group to p.Groups (0 items in p.Items)
+	p.Groups = append(p.Groups, Group{ID: "empty-group-id", Name: "Empty Group", Kind: "subscription"})
+	if e := writeProfiles(p); e != nil {
+		t.Fatal(e)
+	}
+
+	// Deleting an empty group should succeed without 409 "Пустая группа"
+	resp = callAPI(a, "/api/groups/delete", map[string]any{"id": "empty-group-id"})
+	if resp.Code != 200 {
+		t.Fatalf("delete empty group failed: %d %s", resp.Code, resp.Body.String())
+	}
+	p, _ = readProfiles()
+	for _, g := range p.Groups {
+		if g.ID == "empty-group-id" {
+			t.Fatal("empty-group-id should have been deleted")
+		}
+	}
+}

@@ -38,7 +38,6 @@
           <p id="login-error" class="field-error" role="alert"></p>
         </form>
         <p class="login-footnote">⌁ Код действителен ограниченное время. Доступ разрешён только в домашней сети.</p>
-        <div class="promo-container login-promo"><div class="promo-top"><img src="/cvpn-brand.png?v=rc42" alt="" width="44" height="44"><span class="promo-kicker">ОФИЦИАЛЬНЫЙ VPN · CVPN</span></div><h2>Ещё нет VPN?</h2><p>CVPN: Нидерланды, Германия, США и 3 дня пробного периода. При наличии данных подписки приложение покажет срок действия, позволит обновить серверы и проверить их задержку.</p><a class="promo-link" href="https://cvpn.su" target="_blank" rel="noopener noreferrer">Перейти на cvpn.su <span aria-hidden="true">↗</span></a></div>
       </section>
 
       <div id="dashboard" hidden>
@@ -65,14 +64,12 @@
         <section class="config-section" aria-label="Конфигурации">
           <div class="section-heading"><div><h2>Серверы</h2><p>Нажмите на сервер для подключения</p></div><button id="add-toggle" class="add-circle" title="Добавить конфигурацию" aria-label="Добавить конфигурацию" disabled>＋</button></div>
           <div id="profiles" class="group-list"><div class="loading-row">Загружаем конфигурации…</div></div>
-          <div id="home-empty-promo" class="promo-container" hidden><div class="promo-top"><img src="/cvpn-brand.png?v=rc42" alt="" width="44" height="44"><span class="promo-kicker">CVPN · PRIVATE NETWORK</span></div><h2>Начните с CVPN</h2><p>Добавьте подписку CVPN: узнавайте срок действия, обновляйте список серверов и проверяйте задержку. Дополнительный режим обхода DPI исследуется и пока недоступен.</p><a class="promo-link" href="https://cvpn.su" target="_blank" rel="noopener noreferrer">Открыть cvpn.su <span aria-hidden="true">↗</span></a></div>
         </section>
         </div>
         <section id="tab-subscriptions" class="panel-tab" data-tab="subscriptions" hidden>
           <div class="section-intro"><div class="eyebrow">ВАШИ КОНФИГУРАЦИИ</div><h2>Подписки</h2><p>Управляйте доступом, обновляйте ссылки и добавляйте свои серверы.</p></div>
           <button id="subs-add" class="primary full-width subs-add" type="button">＋ Добавить конфигурацию</button>
           <div id="subscription-list" class="subscription-list"></div>
-          <div id="subs-promo" class="promo-container" hidden><div class="promo-top"><img src="/cvpn-brand.png?v=rc42" alt="" width="44" height="44"><span class="promo-kicker">РЕКОМЕНДУЕМЫЙ СЕРВИС</span></div><h2>CVPN для вашего LG</h2><p>CVPN: серверы Нидерландов, Германии и США, сведения о подписке, обновление серверов и проверка задержки. Дополнительный режим обхода DPI пока исследуется.</p><a href="https://cvpn.su" class="promo-link" target="_blank" rel="noopener noreferrer">Открыть cvpn.su <span aria-hidden="true">↗</span></a></div>
         </section>
         <section id="tab-settings" class="panel-tab" data-tab="settings" hidden>
           <div class="section-intro"><div class="eyebrow">УПРАВЛЕНИЕ</div><h2>Настройки</h2><p>Управление телевизором, доступом и диагностикой.</p></div>
@@ -246,7 +243,7 @@
       <div id="rename-view" class="modal-page" hidden>
         <form id="rename-form"><label for="rename-input">Название группы</label><input id="rename-input" maxlength="60" required><button class="primary full-width" type="submit">Сохранить</button></form>
       </div>
-      <div id="delete-view" class="modal-page" hidden><p class="modal-description">Удалить группу и все связанные серверы? Это действие нельзя отменить.</p><div class="confirm-actions"><button id="cancel-delete" class="secondary">Отмена</button><button id="confirm-delete" class="danger-button">Удалить</button></div></div>
+      <div id="delete-view" class="modal-page" hidden><p class="modal-description" id="delete-modal-desc">Удалить группу и все связанные серверы? Это действие нельзя отменить.</p><div class="confirm-actions"><button id="cancel-delete" class="secondary">Отмена</button><button id="confirm-delete" class="danger-button">Удалить</button></div></div>
       <div id="info-view" class="modal-page" hidden><dl id="info-list" class="info-list"></dl></div>
     </div>
   </div>

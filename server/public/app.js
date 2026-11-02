@@ -27,7 +27,7 @@
   var subscriptionProbeResults={};
   try { collapsed = JSON.parse(localStorage.getItem('cvpn_connect_collapsed') || '{}') || {}; } catch (e) {collapsed={};}
   var localeNumber = function(n){if(locale&&locale.language()==='en')return n+(n===1?' server':' servers');return n+' '+((n%10===1 && n%100!==11)?'сервер':((n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?'сервера':'серверов'));};
-  function visible(id, yes){ $(id).hidden=!yes; }
+  function visible(id, yes){ var el=$(id); if(el) el.hidden=!yes; }
   function alertUser(text, bad){var t=$('notice');t.textContent=text;t.className='toast'+(bad?' error':'');t.hidden=false;clearTimeout(alertUser.timer);alertUser.timer=setTimeout(function(){t.hidden=true;},7000);}
   function showLogin(){switchTab('home');visible('settings-trigger',false);accessKey='';csrf='';sessionStorage.removeItem('cvpn_webui_key');visible('login',true);visible('dashboard',false);$('settings-trigger').disabled=true;closeModal();}
   function api(endpoint,method,body){
@@ -255,7 +255,7 @@
   function renderProfiles(result){
     allProfiles=result||{items:[],groups:[],active:''};var target=$('profiles');target.textContent='';
     var items=(allProfiles.items||[]).filter(function(x){return x.groupId!=='installed'&&x.id!=='installed';}),groups=(allProfiles.groups||[]).filter(function(g){return g.kind!=='installed'&&g.id!=='installed';});
-    visible('home-empty-promo',!items.length);visible('subs-promo',!items.length);renderSubscriptions();
+    renderSubscriptions();
     if(!items.length){var empty=document.createElement('div');empty.className='empty-state';empty.innerHTML='<strong>Нет конфигураций</strong><p>Добавьте подписку или VLESS-ссылку с телефона, чтобы начать.</p>';target.appendChild(empty);return;}
     if(!groups.length){groups=[{id:'manual',name:'Отдельные подключения',kind:'manual',count:items.length}];}
     groups.forEach(function(g){
@@ -320,7 +320,7 @@
       item.appendChild(avatar);item.appendChild(inner);item.appendChild(arrow);
       item.onclick=function(){openGroupMenu(group);};root.appendChild(item);
     });
-    if(!(allProfiles.items||[]).filter(function(x){return x.id!=='installed';}).length){var note=document.createElement('div');note.className='subscriptions-hint';note.textContent='Конфигураций пока нет. Добавьте свою ссылку либо начните с CVPN.';root.appendChild(note);}
+    if(!(allProfiles.items||[]).filter(function(x){return x.id!=='installed';}).length){var note=document.createElement('div');note.className='subscriptions-hint';note.textContent='Конфигураций пока нет. Добавьте подписку или VLESS-ссылку.';root.appendChild(note);}
   }
   function switchTab(tab){
     if(['home','subscriptions','settings'].indexOf(tab)<0)tab='home';currentTab=tab;
@@ -357,7 +357,7 @@
   function openModal(title,view){modalReturnFocus=document.activeElement;$('modal-title').textContent=title;views.forEach(function(v){visible(v,v===view);});visible('modal-overlay',true);document.body.classList.add('no-scroll');$('modal-close').focus();}
   function changeModal(title,view){$('modal-title').textContent=title;views.forEach(function(v){visible(v,v===view);});}
   function closeModal(){visible('modal-overlay',false);document.body.classList.remove('no-scroll');if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();}
-  function openGroupMenu(g){modalGroup=g;openModal(g.name,'group-view');$('group-summary').textContent=(g.kind==='subscription'?'Подписка':g.kind==='installed'?'Исходный профиль':'Группа')+' · '+localeNumber(g.count||0)+(g.domain?' · '+g.domain:'');$('group-refresh').disabled=!g.canRefresh;$('group-delete').disabled=g.kind==='installed';}
+  function openGroupMenu(g){modalGroup=g;openModal(g.name,'group-view');$('group-summary').textContent=(g.kind==='subscription'?'Подписка':g.kind==='installed'?'Исходный профиль':'Группа')+' · '+localeNumber(g.count||0)+(g.domain?' · '+g.domain:'');visible('group-refresh',g.canRefresh);$('group-refresh').disabled=!g.canRefresh;$('group-delete').disabled=g.kind==='installed';var isSub=g.kind==='subscription',isManual=g.id==='manual';$('group-delete').innerHTML=(isSub?'Удалить подписку':isManual?'Очистить группу':'Удалить группу')+' <span>⌫</span>';}
   function showImportReport(result,title){
     var rows=[['Получено',String(result.received||0)],['Принято',String(result.valid===undefined?(result.imported||0):result.valid)],['Добавлено',String(result.added===undefined?(result.imported||0):result.added)],['Пропущено',(result.issues||[]).length+''],['Сохранено старых',String(result.retained||0)],['Удалено',String(result.removed||0)]];
     (result.issues||[]).forEach(function(issue){rows.push([issue.server||'Сервер',issue.reason||'Не прошёл проверку']);});
@@ -365,7 +365,7 @@
     if(result.partial){rows.push(['Внимание','Часть ссылок не прошла проверку. Ранее сохранённые серверы оставлены без удаления.']);}
     openModal(title,'info-view');fillInfo(rows);
   }
-  function groupAction(action, extra){if(busy||!modalGroup)return;setBusy(true);var id=modalGroup.id;var refreshButtons=document.querySelectorAll('.group-refresh-button');Array.prototype.forEach.call(refreshButtons,function(btn){btn.disabled=true;if(action==='refresh'&&btn.getAttribute('data-group-id')===id){btn.classList.add('is-refreshing');btn.setAttribute('aria-busy','true');}});return api('groups/'+action,'POST',Object.assign({id:id},extra||{})).then(function(result){return refresh().then(function(){return result;});}).then(function(result){closeModal();if(action==='refresh'){showImportReport(result,'Отчёт об обновлении');}else{alertUser(action==='rename'?'Название сохранено':'Группа удалена');}}).catch(function(e){if(e.issues&&e.issues.length){showImportReport({issues:e.issues},'Ошибки подписки');}alertUser(e.message,true);}).then(function(){setBusy(false);Array.prototype.forEach.call(document.querySelectorAll('.group-refresh-button'),function(btn){btn.disabled=false;btn.classList.remove('is-refreshing');btn.removeAttribute('aria-busy');});});}
+  function groupAction(action, extra){if(busy||!modalGroup)return;setBusy(true);var id=modalGroup.id;var refreshButtons=document.querySelectorAll('.group-refresh-button');Array.prototype.forEach.call(refreshButtons,function(btn){btn.disabled=true;if(action==='refresh'&&btn.getAttribute('data-group-id')===id){btn.classList.add('is-refreshing');btn.setAttribute('aria-busy','true');}});return api('groups/'+action,'POST',Object.assign({id:id},extra||{})).then(function(result){return refresh().then(function(){return result;});}).then(function(result){closeModal();if(action==='refresh'){showImportReport(result,'Отчёт об обновлении');}else{var isSub=modalGroup&&modalGroup.kind==='subscription',isManual=modalGroup&&modalGroup.id==='manual';alertUser(action==='rename'?'Название сохранено':isSub?'Подписка удалена':isManual?'Группа очищена':'Группа удалена');}}).catch(function(e){if(e.issues&&e.issues.length){showImportReport({issues:e.issues},'Ошибки подписки');}alertUser(e.message,true);}).then(function(){setBusy(false);Array.prototype.forEach.call(document.querySelectorAll('.group-refresh-button'),function(btn){btn.disabled=false;btn.classList.remove('is-refreshing');btn.removeAttribute('aria-busy');});});}
   function openServerInfo(p,g){modalServer=p;openModal('Сведения о сервере','info-view');fillInfo([['Название',p.name],['Сервис',g.name],['Протокол','VLESS'],['Транспорт',p.transport],['Защита',p.security],['Адрес сервера',p.address||'—'],['Состояние',currentStatus&&currentStatus.connected&&allProfiles.active===p.id?'Подключён':allProfiles.active===p.id?'Выбран':'Не выбран']]);}
   function fillInfo(entries){var list=$('info-list');list.textContent='';entries.forEach(function(pair){var row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=pair[0];dd.textContent=pair[1];row.appendChild(dt);row.appendChild(dd);list.appendChild(row);});}
   function detectType(value){var v=value.trim().toLowerCase();if(v.indexOf('https://')===0)return 'HTTPS-подписка · название определится автоматически';if(v.indexOf('vless://')===0)return 'VLESS · один сервер';if(v.charAt(0)==='{')return 'JSON · конфигурация Xray';return 'Вставьте HTTPS, VLESS или JSON';}
@@ -592,7 +592,14 @@
   $('group-refresh').onclick=function(){groupAction('refresh');};
   $('group-rename').onclick=function(){changeModal('Переименовать группу','rename-view');$('rename-input').value=modalGroup.name;$('rename-input').focus();};
   $('rename-form').onsubmit=function(e){e.preventDefault();groupAction('rename',{name:$('rename-input').value});};
-  $('group-delete').onclick=function(){changeModal('Удалить группу?','delete-view');};
+  $('group-delete').onclick=function(){
+    var isSub=modalGroup&&modalGroup.kind==='subscription';
+    var isManual=modalGroup&&modalGroup.id==='manual';
+    var title=isSub?'Удалить подписку?':isManual?'Очистить группу?':'Удалить группу?';
+    var desc=isSub?('Удалить подписку «'+modalGroup.name+'» и все входящие в неё серверы? Это действие нельзя отменить.'):isManual?'Удалить все сохранённые серверы из этой группы? Это действие нельзя отменить.':('Удалить группу «'+modalGroup.name+'» и все связанные серверы? Это действие нельзя отменить.');
+    var el=$('delete-modal-desc');if(el)el.textContent=desc;
+    changeModal(title,'delete-view');
+  };
   $('cancel-delete').onclick=function(){changeModal(modalGroup.name,'group-view');};
   $('confirm-delete').onclick=function(){groupAction('delete');};
   $('group-info').onclick=function(){changeModal('Информация о группе','info-view');fillInfo([['Название',modalGroup.name],['Тип',modalGroup.kind==='subscription'?'HTTPS-подписка':modalGroup.kind==='installed'?'Исходный профиль':'Локальная группа'],['Серверов',String(modalGroup.count||0)],['Источник',modalGroup.domain||'Локально'],['Последнее обновление',modalGroup.updatedAt||'Неизвестно']]);};
