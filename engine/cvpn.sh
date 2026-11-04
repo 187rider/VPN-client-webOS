@@ -12,7 +12,8 @@ RUN_CONFIG="$STATE/client.runtime.json"
 SERVER_FILE="$BASE/config/server-ip.txt"
 SELF="$BASE/bin/cvpn.sh"
 IFACE=cvpn0
-DNS=8.8.8.8
+DEFAULT_DNS=8.8.8.8
+DNS="$DEFAULT_DNS"
 DNS_TARGET=/var/lib/misc/resolv.conf
 RESOLV=/etc/resolv.conf
 TRIAL_SECONDS=90
@@ -52,6 +53,30 @@ detect_wan() {
     fi
     WAN=$wan
     GATEWAY=$gw
+}
+
+# Discover DHCP or network-provided DNS resolver. Prefers DHCP DNS (e.g. DoH
+# resolver at 192.168.1.1) and falls back safely to DEFAULT_DNS (8.8.8.8).
+detect_dns() {
+    d=""
+    if command -v luna-send >/dev/null 2>&1; then
+        d=$(luna-send -n 1 -f luna://com.webos.service.connectionmanager/getStatus "{}" 2>/dev/null | awk -F'"' '/"dns1":/ {print $4; exit}')
+    fi
+    if [ -z "$d" ] && command -v connmanctl >/dev/null 2>&1; then
+        d=$(connmanctl services 2>/dev/null | awk '{print $NF}' | while read s; do
+            connmanctl services "$s" 2>/dev/null | awk -F'[\\[\\]]' '/Nameservers =/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); split($2, arr, "[, ]+"); print arr[1]; exit}'
+        done | head -n 1)
+    fi
+    if [ -z "$d" ] && [ -f "$DNS_TARGET" ]; then
+        d=$(awk '/^nameserver / && $2 !~ /^(127\.|::1)/ {print $2; exit}' "$DNS_TARGET" 2>/dev/null)
+    fi
+    case "$d" in
+        ''|*[!0-9.]*) d="${GATEWAY:-$DEFAULT_DNS}" ;;
+    esac
+    case "$d" in
+        ''|*[!0-9.]*) d="$DEFAULT_DNS" ;;
+    esac
+    printf '%s\n' "$d"
 }
 
 # Derive an ephemeral runtime Xray config; the user's original client.json is
@@ -126,7 +151,8 @@ rollback_unlocked() {
     rc=0
     ip -4 route del 0.0.0.0/1 dev "$IFACE" 2>/dev/null || true
     ip -4 route del 128.0.0.0/1 dev "$IFACE" 2>/dev/null || true
-    restore_route "$DNS" "$STATE/dns.route" || rc=1
+    dns_ip=$(cat "$STATE/dns.ip" 2>/dev/null || echo "$DNS")
+    restore_route "$dns_ip" "$STATE/dns.route" || rc=1
     # Never use the mutable server-ip.txt for rollback of a running session.
     # Compatibility fallback is only for sessions started with Engine 0.1.1.
     if [ -s "$STATE/active-server-ip" ]; then
@@ -163,7 +189,7 @@ rollback_unlocked() {
     ip -4 route show 128.0.0.0/1 | grep -q "dev $IFACE" && rc=1
     mounted_resolver && rc=1
     if [ "$rc" -eq 0 ]; then
-        rm -f "$STATE/active" "$STATE/phase" "$STATE/mode" "$STATE/deadline" "$STATE/xray.pid" "$STATE/active-server-ip" "$STATE/dns.route" "$STATE/server.route" "$STATE/probe.general" "$STATE/probe.youtube" "$STATE/probe.dns" "$STATE/wan" "$STATE/gateway" "$RUN_CONFIG"
+        rm -f "$STATE/active" "$STATE/phase" "$STATE/mode" "$STATE/deadline" "$STATE/xray.pid" "$STATE/active-server-ip" "$STATE/dns.route" "$STATE/server.route" "$STATE/probe.general" "$STATE/probe.youtube" "$STATE/probe.dns" "$STATE/wan" "$STATE/gateway" "$STATE/dns.ip" "$STATE/dns.dev" "$RUN_CONFIG"
         say 'NETWORK_RESTORED=YES'
     else
         say 'NETWORK_RESTORED=CHECK_REQUIRED'
@@ -290,9 +316,24 @@ start_now() {
         unlock; fail 'Xray runtime config validation failed'
     fi
 
+    DNS=$(detect_dns)
+    is_local_dns=0
+    case "$DNS" in
+        "$GATEWAY"|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
+            is_local_dns=1
+            ;;
+    esac
+    if [ "$is_local_dns" -eq 1 ]; then
+        DNS_DEV="$WAN"
+    else
+        DNS_DEV="$IFACE"
+    fi
+
     # Staging does not alter ConnMan's underlying resolver file.
     printf 'nameserver %s\n' "$DNS" > "$STATE/resolv.vpn" || { unlock; fail 'Could not stage DNS'; }
     chmod 600 "$STATE/resolv.vpn"
+    printf '%s\n' "$DNS" > "$STATE/dns.ip" || { unlock; fail 'Cannot save DNS IP'; }
+    printf '%s\n' "$DNS_DEV" > "$STATE/dns.dev" || { unlock; fail 'Cannot save DNS device'; }
     ip -4 route show "$DNS/32" > "$STATE/dns.route" || { unlock; fail 'Cannot snapshot DNS route'; }
     ip -4 route show "$server/32" > "$STATE/server.route" || { unlock; fail 'Cannot snapshot server route'; }
     # Snapshot endpoint address BEFORE any routes are changed. server-ip.txt can
@@ -339,7 +380,13 @@ start_now() {
     ip -4 route replace "$server/32" via "$GATEWAY" dev "$WAN" || ok=0
     if [ "$ok" -eq 1 ]; then ip -4 route add 0.0.0.0/1 dev "$IFACE" || ok=0; fi
     if [ "$ok" -eq 1 ]; then ip -4 route add 128.0.0.0/1 dev "$IFACE" || ok=0; fi
-    if [ "$ok" -eq 1 ]; then ip -4 route replace "$DNS/32" dev "$IFACE" || ok=0; fi
+    if [ "$ok" -eq 1 ]; then
+        if [ "$is_local_dns" -eq 1 ]; then
+            ip -4 route replace "$DNS/32" via "$GATEWAY" dev "$WAN" || ok=0
+        else
+            ip -4 route replace "$DNS/32" dev "$IFACE" || ok=0
+        fi
+    fi
     if [ "$ok" -eq 1 ]; then mount -o bind "$STATE/resolv.vpn" "$DNS_TARGET" || ok=0; fi
     if [ "$ok" -eq 1 ] && ! grep -qx "nameserver $DNS" "$RESOLV"; then ok=0; fi
     if [ "$ok" -eq 0 ]; then
@@ -414,11 +461,13 @@ watch_now() {
         if ! owned_xray || ! ip link show dev "$IFACE" >/dev/null 2>&1; then
             say 'Xray/TUN lost; restoring'; stop_now "$expected"; exit $?
         fi
+        dns_ip=$(cat "$STATE/dns.ip" 2>/dev/null || echo "$DNS")
+        dns_dev=$(cat "$STATE/dns.dev" 2>/dev/null || echo "$IFACE")
         if ! ip -4 route show 0.0.0.0/1 | grep -q "dev $IFACE" ||
            ! ip -4 route show 128.0.0.0/1 | grep -q "dev $IFACE" ||
-           ! ip -4 route show "$DNS/32" | grep -q "dev $IFACE" ||
+           ! ip -4 route show "$dns_ip/32" | grep -q "dev $dns_dev" ||
            ! mounted_resolver ||
-           ! grep -qx "nameserver $DNS" "$RESOLV"; then
+           ! grep -qx "nameserver $dns_ip" "$RESOLV"; then
             say 'Routing or DNS mount changed; restoring'; stop_now "$expected"; exit $?
         fi
         if [ "$phase" = ready ]; then
@@ -464,7 +513,10 @@ status_now() {
     say 'Routes:'
     ip -4 route show 0.0.0.0/1
     ip -4 route show 128.0.0.0/1
-    ip -4 route show "$DNS/32"
+    dns_ip=$(cat "$STATE/dns.ip" 2>/dev/null || echo "$DNS")
+    dns_dev=$(cat "$STATE/dns.dev" 2>/dev/null || echo "$IFACE")
+    say "DNS: $dns_ip (dev $dns_dev)"
+    ip -4 route show "$dns_ip/32"
     ip -4 route show default
     say "Logs: $STATE/xray.log, $STATE/watchdog.log"
 }

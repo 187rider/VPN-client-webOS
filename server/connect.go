@@ -154,7 +154,18 @@ func diagnostics() map[string]any {
 	result["engineVersion"] = engineVersion()
 	result["dnsExplanation"] = "Системный DNS при VPN направляется через cvpn0; это само по себе не доказывает DoH."
 	if active() {
-		result["dnsRouteExpected"] = "8.8.8.8 via cvpn0"
+		dnsIP := "8.8.8.8"
+		if b, err := os.ReadFile(path("state", "dns.ip")); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			dnsIP = strings.TrimSpace(string(b))
+		}
+		dnsDev := "cvpn0"
+		if b, err := os.ReadFile(path("state", "dns.dev")); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			dnsDev = strings.TrimSpace(string(b))
+		}
+		result["dnsRouteExpected"] = dnsIP + " via " + dnsDev
+		if dnsDev != "cvpn0" {
+			result["dnsExplanation"] = "Системный DNS направляется на локальный DoH/DHCP-резолвер (" + dnsIP + ")."
+		}
 	}
 	result["httpsState"], result["httpsDetail"] = httpsProbe()
 	if state["needsRecovery"] == true {
