@@ -152,7 +152,7 @@ func diagnostics() map[string]any {
 	}
 	state := status()
 	result["engineVersion"] = engineVersion()
-	result["dnsExplanation"] = "Системный DNS при VPN направляется через cvpn0; это само по себе не доказывает DoH."
+	result["dnsExplanation"] = "Системный DNS направляется на локальный DHCP-резолвер."
 	if active() {
 		dnsIP := "8.8.8.8"
 		if b, err := os.ReadFile(path("state", "dns.ip")); err == nil && len(strings.TrimSpace(string(b))) > 0 {
@@ -165,6 +165,8 @@ func diagnostics() map[string]any {
 		result["dnsRouteExpected"] = dnsIP + " via " + dnsDev
 		if dnsDev != "cvpn0" {
 			result["dnsExplanation"] = "Системный DNS направляется на локальный DoH/DHCP-резолвер (" + dnsIP + ")."
+		} else {
+			result["dnsExplanation"] = "Системный DNS при VPN направляется через cvpn0 (" + dnsIP + ")."
 		}
 	}
 	result["httpsState"], result["httpsDetail"] = httpsProbe()

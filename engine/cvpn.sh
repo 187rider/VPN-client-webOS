@@ -180,6 +180,13 @@ rollback_unlocked() {
         say 'DNS_MOUNT_RESTORED=NOT_MOUNTED'
     fi
 
+    # Ensure underlying resolv.conf has DHCP DNS as primary after unmount
+    if [ -n "$dns_ip" ] && [ -f "$DNS_TARGET" ]; then
+        if ! grep -q "^nameserver $dns_ip" "$DNS_TARGET"; then
+            printf 'nameserver %s\nnameserver 127.0.0.1\n' "$dns_ip" > "$DNS_TARGET" 2>/dev/null || true
+        fi
+    fi
+
     if owned_xray; then
         kill "$(cat "$STATE/xray.pid")" 2>/dev/null || true
         sleep 1
